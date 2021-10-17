@@ -1,7 +1,87 @@
 ﻿//last changes: 08.31.2021
 #pragma once
 
+#include <Windows.h>
+#include <chrono>
+#include <thread>
+#include <TlHelp32.h>
+#include <math.h>
+#include <iostream>
+#include <vector>
+#include <string>
+#include <random>
+#include <tlhelp32.h>
+#include <psapi.h>
+#include <functional>
+#include <fstream>
+#include <sstream>
+#include <iomanip>
+#include <array>
+
 typedef DWORD ADDRESS;
+
+int wstrcmp( const wchar_t *str1, const wchar_t *str2 );
+byte new_wstrcmp( const wchar_t *str1, const wchar_t *str2 );
+
+int wstrcmp( const wchar_t *str1, const wchar_t *str2 )
+{
+	short sh_strIndex = 0;
+	short symbols_ident = 0;
+	short symbols_remaining = 0;
+	if ( str1[sh_strIndex] == '\0' || str2[sh_strIndex] == '\0' )
+		return 0xfff;
+	while ( str1[sh_strIndex] != '\0' && str2[sh_strIndex] != '\0' )
+	{
+		if ( str1[sh_strIndex] == str2[sh_strIndex] )
+			symbols_ident++;
+		//check if first word end
+		if ( str1[sh_strIndex] == '\0' && str2[sh_strIndex] != '\0' )
+		{
+			for ( ; str2[sh_strIndex] != '\0'; symbols_remaining++ )
+			{
+				sh_strIndex++;
+			}
+			return symbols_remaining;
+		}
+		//check if second word end
+		if ( str1[sh_strIndex] != '\0' && str2[sh_strIndex] == '\0' )
+		{
+			for ( ; str1[sh_strIndex] != '\0'; symbols_remaining++ )
+			{
+				sh_strIndex++;
+			}
+			return symbols_remaining;
+		}
+		sh_strIndex++;
+	}
+	//for (int i_str2Length =0;str2[i_str2Length]!='\0';i_str2Length++)
+	//for (int i_str1Length = 0; str1[i_str1Length] != '\0'; i_str1Length++)
+		//if (j == i_str2Length) {
+	if ( str1[sh_strIndex] == '\0' && str2[sh_strIndex] == '\0' && symbols_ident != 0 && symbols_remaining == 0 )
+		return 0;
+	//}
+	else return 0x8000;
+};
+
+byte new_wstrcmp( const wchar_t *str1, const wchar_t *str2 )
+{
+	byte not_lenght_equal = 0xFF;
+	byte not_symbol_equal = 0xFE;
+	byte equal = 0x0;
+	if ( lstrlenW( str1 ) != lstrlenW( str2 ) )
+	{
+		return not_lenght_equal;
+	}
+	for ( byte i = lstrlenW( str1 ); i > 0; --i )
+	{
+		if ( str1[i] != str2[i] )
+		{
+			return not_symbol_equal;
+		}
+	}
+	return equal;
+}
+
 
 class RAM
 {
@@ -20,10 +100,10 @@ public:
 	MEMORY_BASIC_INFORMATION    mbi;
 
 	template <typename T>
-	T __fastcall read( DWORD  address );
+	T __fastcall read( HANDLE  address );
 
 	template <typename T>
-	void __fastcall write( DWORD address, T value );
+	void __fastcall write( HANDLE address, T value );
 
 	template <typename T, size_t N>
 	size_t countof( T( &array )[ N ] );
@@ -114,7 +194,7 @@ public:
 
 
 template <typename T>
-T __fastcall RAM::read( DWORD  address )
+T __fastcall RAM::read( HANDLE  address )
 {
 	T _read;
 	ReadProcessMemory( hProcess, ( LPCVOID ) address, &_read, sizeof( T ), NULL );
@@ -123,7 +203,7 @@ T __fastcall RAM::read( DWORD  address )
 
 
 template <typename T>
-void __fastcall RAM::write( DWORD address, T value )
+void __fastcall RAM::write( HANDLE address, T value )
 {
 	WriteProcessMemory( hProcess, ( LPVOID ) address, &value, sizeof( T ), NULL );
 }
@@ -314,8 +394,8 @@ std::pair<HANDLE, DWORD>RAM::GetModule( const wchar_t* modulename )
 	if ( ( DWORD ) hProcess == ( DWORD ) 0x0 )
 	{
 		std::cerr << "HANDLE GetModule() -> no have handle of process" << std::endl;
-		throw "no handle of process\n";
-		exit( 0xAB0BA );
+		//throw "no handle of process\n";
+		//exit( 0xAB0BA );
 	}
 	do
 	{
@@ -400,14 +480,14 @@ HANDLE RAM::getProcessHandle( const wchar_t* window_name )
 
 DWORD RAM::GetProcessHandle( const wchar_t* process_name_exe )
 {
-	DWORD dw_rights = PROCESS_ALL_ACCESS;
+	DWORD dw_rights = PROCESS_VM_READ;
 	HANDLE handle = CreateToolhelp32Snapshot( TH32CS_SNAPPROCESS, NULL );
 
 	PROCESSENTRY32 entry;
 	entry.dwSize = sizeof( entry );
 	do
 	{
-		if ( !wstrcmp( ( const wchar_t* ) entry.szExeFile, ( const wchar_t* ) process_name_exe ) )
+		if ( !new_wstrcmp( ( const wchar_t* ) entry.szExeFile, ( const wchar_t* ) process_name_exe ) )
 		{
 			dwProcId = entry.th32ProcessID;
 			CloseHandle( handle );
