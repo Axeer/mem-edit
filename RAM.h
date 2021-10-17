@@ -19,6 +19,7 @@
 #include <array>
 
 typedef DWORD ADDRESS;
+typedef std::wstring wstr;
 
 int wstrcmp( const wchar_t *str1, const wchar_t *str2 );
 byte new_wstrcmp( const wchar_t *str1, const wchar_t *str2 );
@@ -99,6 +100,9 @@ public:
 
 	MEMORY_BASIC_INFORMATION    mbi;
 
+	std::wstring process_name = L"";
+	std::wstring window_name = L"";
+
 	template <typename T>
 	T __fastcall read( HANDLE  address );
 
@@ -154,6 +158,10 @@ public:
 	bool IsMemoryReadable( void* ptr, size_t byteCount );
 
 	ADDRESS VerificatePattern( ADDRESS pattern2verificate, std::pair<ADDRESS, ADDRESS> range, LPCSTR mask, std::vector<BYTE> pattern_sign );
+
+	void WaitProcess(std::wstring process_name, std::wstring window_name);
+	void WaitProcess(std::wstring process_name);
+	void WaitProcess();
 };
 
 
@@ -739,6 +747,47 @@ ADDRESS RAM::VerificatePattern( ADDRESS pattern2verificate, std::pair<ADDRESS, A
 	ADDRESS finded = FindPattern( currentaddress, checksize, sig, mask );
 	return  finded - pattern2verificate;
 	// возвращает дистанцию между найденым папттерном и верифицируемым
+}
+
+
+void RAM::WaitProcess(std::wstring process_name, std::wstring window_name) {
+	for (;; Sleep(1000)) {
+		if (process_name != L"" && window_name != L"") {
+			if (this->GetProcessHandle(process_name.c_str()) && this->getWindowHandle(window_name.c_str()))
+				return;
+		}
+		else {
+			if (this->process_name == L"" || this->window_name == L"")
+				throw(0xAB0BA);
+			process_name = this->process_name;
+			window_name = this->window_name;
+		}
+
+	}
+}
+
+
+void RAM::WaitProcess(std::wstring process_name) {
+	for (;; Sleep(1000)) {
+		if (process_name != L"") {
+			if (this->GetProcessHandle(process_name.c_str()))
+				return;
+		}
+		else {
+			if (this->process_name == L"")
+				throw(0xAB0BA);
+			process_name = this->process_name;
+		}
+
+	}
+}
+
+void RAM::WaitProcess() {
+	if (this->process_name == L"" || this->window_name == L"")
+		throw(0xAB0BA);
+	for (;; Sleep(1000))
+		if (this->GetProcessHandle(this->process_name.c_str()) && this->getWindowHandle(this->window_name.c_str()))
+			return;
 }
 
 RAM ram;
