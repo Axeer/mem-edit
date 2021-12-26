@@ -217,14 +217,14 @@ public:
     DllModule();
     DllModule(const wchar_t* name);
     const wchar_t* GetName();
-    HANDLE						GetBase();
-    void						SetBase(HANDLE val);
-    void						AddOffset(DWORD val);
-    void						AddOffsets(std::vector<DWORD> offsets);
-    DWORD						GetOffsset(USHORT index);
-    std::vector<DWORD>			GetOffssets();
-    std::pair<HANDLE, DWORD>	GetModuleBaseEnd();
-    DWORD						GetSize();
+    HANDLE GetBase();
+    void SetBase(HANDLE val);
+    void AddOffset(DWORD val);
+    void AddOffsets(std::vector<DWORD> offsets);
+    DWORD GetOffsset(USHORT index);
+    std::vector<DWORD> GetOffssets();
+    std::pair<HANDLE, DWORD> GetModuleBaseEnd();
+    DWORD GetSize();
 
 };
 
