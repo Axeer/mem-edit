@@ -658,7 +658,7 @@ FORCEINLINE bool RAM::DataCompare(const BYTE* pData, const BYTE* pMask, const ch
 //find pattern in address space of process
 DWORD RAM::FindPattern( DWORD start, DWORD size, LPCSTR sig, LPCSTR mask )
 {
-    BYTE* data = new BYTE[ size ];  // TODO: вызывает bad allocation из-за попытки аллокации APP SIZE количества байтов(дохуя короче)
+    BYTE* data = new BYTE[ size ];
     DWORD bytesread = NULL;
     if ( !ReadProcessMemory( hProcess, ( LPCVOID ) start, data, size, ( SIZE_T* ) &bytesread ) )
     {
@@ -793,9 +793,6 @@ bool RAM::IsMemoryReadable(void* ptr, size_t byteCount)
     if ( temp_mbi.Protect == PAGE_NOACCESS || temp_mbi.Protect == PAGE_EXECUTE )
         return false;
 
-      // This checks that the start of memory block is in the same "region" as the
-      // end. If it isn't you "simplify" the problem into checking that the rest of 
-      // the memory is readable.
     size_t blockOffset = (size_t)( (char*)ptr - (char*)temp_mbi.AllocationBase );
     size_t blockBytesPostPtr = temp_mbi.RegionSize - blockOffset;
 
