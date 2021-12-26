@@ -402,8 +402,8 @@ std::pair<HANDLE, DWORD>RAM::GetModule( const wchar_t* modulename )
 	if ( ( DWORD ) hProcess == ( DWORD ) 0x0 )
 	{
 		std::cerr << "HANDLE GetModule() -> no have handle of process" << std::endl;
-		//throw "no handle of process\n";
-		//exit( 0xAB0BA );
+		throw "no handle of process\n";
+		exit( 0xAB0BA );
 	}
 	do
 	{
