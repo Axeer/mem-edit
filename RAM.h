@@ -1,4 +1,4 @@
-﻿//last changes: 26.12.2021
+﻿//last changes: 28.12.2021
 #pragma once
 
 #include <Windows.h>
@@ -245,9 +245,9 @@ public:
 
 class DllModule
 {
-    HANDLE						handle_base;
-    DWORD						module_size;
-    std::vector < DWORD >		offsets;
+    HANDLE handle_base;
+    DWORD module_size;
+    std::vector < DWORD > offsets;
     const wchar_t* name;
     std::pair < HANDLE, DWORD >	module_base_size;
 public:
@@ -306,19 +306,19 @@ public:
 
 class Iterator
 {
-    DWORD64 iter;
+    size_t val;
 public:
     Iterator(size_t init = 0)
     {
-        this->iter = init;
+        this->val = init;
     }
-    decltype( iter ) next()
+    decltype( val ) next()
     {
-        return ++iter;
+        return ++val;
     }
     bool prev()
     {
-        return --iter >= 0 ? true : iter ^= iter, false;
+        return --val >= 0 ? true : val ^= val, false;
     }
 };
 
