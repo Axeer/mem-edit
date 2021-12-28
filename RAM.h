@@ -21,6 +21,7 @@
 typedef DWORD64 ADDRESS;
 typedef std::wstring wstr;
 #define fastfunc __forceinline
+typedef unsigned char byte;
 
 #ifndef UNICODE
 #define _T(x) L##x
