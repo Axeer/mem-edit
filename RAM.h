@@ -151,10 +151,10 @@ public:
     std::wstring window_name = L"";
 
     template <typename T>
-    T fastfunc read(HANDLE address);
+    fastfunc T read(HANDLE address);
 
     template <typename T>
-    void fastfunc write(HANDLE address, T value);
+    fastfunc void write(HANDLE address, T value);
 
     template <typename T, size_t N>
     size_t countof(T(&array)[N]);
