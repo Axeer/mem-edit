@@ -959,11 +959,19 @@ DWORD DllModule::GetSize()
 class Application
 {
     SYSTEM_INFO system_info;
+    RAM Ram;
 public:
     Application()
     {
         memset(&this->system_info, 0, sizeof(system_info));
         GetSystemInfo(&system_info);
+    }
+
+    Application(LPCWSTR process_name) // Должно скончывацца на .exe
+    {
+        memset(&this->system_info, 0, sizeof(system_info));
+        GetSystemInfo(&system_info);
+        Ram.process_name = process_name;
     }
 
     std::pair<LPVOID, LPVOID> GetBaseEnd()
