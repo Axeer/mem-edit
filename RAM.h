@@ -370,18 +370,18 @@ T RAM::SeqRead(DWORD address_base, std::vector<DWORD> offsets/*DWORD address, sh
         ReadProcessMemory(hProcess, (address + i * sizeof(T)), &_read, sizeof(T));
     }
     return { _readedArray, bytesCount };*/
-    DWORD _base = this->read<DWORD>(address_base);
-    T _output;
-    USHORT _cntr = offsets.size();
+    ADDRESS base_point = this->read<DWORD>(address_base);
+    T out;
+    USHORT counter = offsets.size();
     for ( auto i : offsets )
     {
-        _cntr--;
-        if ( !_cntr )
+        counter--;
+        if ( !counter )
         {
-            _output = this->read<T>(_base + i);
-            return _output;
+            out = this->read<T>(base_point + i);
+            return out;
         }
-        _base = this->read<DWORD>(_base + i);
+        base_point = this->read<DWORD>(base_point + i);
     }
 
 }
