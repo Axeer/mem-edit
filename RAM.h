@@ -31,6 +31,7 @@ typedef unsigned char byte;
 int wstrcmp(const wchar_t* str1, const wchar_t* str2);
 byte new_wstrcmp(const wchar_t* str1, const wchar_t* str2);
 
+
 int wstrcmp(const wchar_t* str1, const wchar_t* str2)
 {
     short sh_strIndex = 0;
@@ -112,8 +113,17 @@ public:
     {
         this->bytes = bytes;
         this->pattern = pattern;
-        if ( this->pattern.size() == this->bytes.size() ) for ( size_t i = 0; i < this->pattern.size(); ++i ) if ( !( i ) ) bytes[i] = 0x0; else;
+        if ( this->pattern.size() == this->bytes.size() ) for ( size_t i = 0; i < this->pattern.size(); ++i ) if ( !( i ) ) this->bytes[i] = 0b0; else;
         else throw( "pattern size not matched with bytes size" );
+        return;
+    }
+
+    Pattern(std::vector<BYTE> bytes)
+    {
+        this->bytes = bytes;
+        this->pattern = {};
+        this->pattern.resize(this->bytes.size(), 1);
+        for ( size_t i = 0; i < this->bytes.size(); ++i ) if ( !( this->bytes[i] ) ) this->pattern[i] = 0b0; else;
         return;
     }
 
@@ -127,6 +137,26 @@ public:
     bool operator==(Pattern pattern2)
     {
         return ( match(pattern2.bytes) && match(pattern2.pattern) );
+    }
+
+    std::wstring operator<<(Pattern)
+    {
+        std::wstring tmp;
+        std::wstringstream wss;
+        for ( size_t i = 0; i < this->bytes.size(); ++i )
+        {
+            wss << std::to_wstring(this->bytes[i])
+                << std::wstring(L"\t->\t")
+                << std::to_wstring(this->pattern[i])
+                << std::endl;
+
+            tmp += ( std::to_wstring(this->bytes[i])
+                    + std::wstring(L"\t->\t")
+                    + std::to_wstring(this->pattern[i])
+                    + std::wstring(L"\n") );
+
+        }
+        return wss.str();
     }
 };
 
@@ -193,7 +223,7 @@ public:
     int read_bytes(LPCVOID addr, int num, void* buf); // C-style writed залупа, пусть название будет в нижнем регистре
 
     template<typename T>
-    __forceinline T ReadMemoryArray(ADDRESS start_address, ADDRESS end_address);
+    fastfunc T ReadMemoryArray(ADDRESS start_address, ADDRESS end_address);
 
     bool DataCompare(const BYTE* pData, const BYTE* pMask, const char* pszMask);
 
