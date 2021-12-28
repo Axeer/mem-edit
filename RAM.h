@@ -20,6 +20,7 @@
 
 typedef DWORD64 ADDRESS;
 typedef std::wstring wstr;
+typedef unsigned char byte;
 
 int wstrcmp(const wchar_t* str1, const wchar_t* str2);
 byte new_wstrcmp(const wchar_t* str1, const wchar_t* str2);
