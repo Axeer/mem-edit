@@ -20,6 +20,13 @@
 
 typedef DWORD64 ADDRESS;
 typedef std::wstring wstr;
+#define fastfunc __forceinline
+typedef unsigned char byte;
+
+#ifndef UNICODE
+#define _T(x) L##x
+#endif // UNICODE
+
 
 int wstrcmp(const wchar_t* str1, const wchar_t* str2);
 byte new_wstrcmp(const wchar_t* str1, const wchar_t* str2);
@@ -83,7 +90,7 @@ byte new_wstrcmp(const wchar_t* str1, const wchar_t* str2)
     return equal;
 }
 
-public class Pattern
+class Pattern
 {
     bool match(std::vector<BYTE, std::allocator<BYTE>> bytes)
     {
@@ -105,7 +112,7 @@ public:
     {
         this->bytes = bytes;
         this->pattern = pattern;
-        if ( this->pattern.size() == this->bytes.size() ) for ( size_t i = 0; i < this->pattern.size(); ++i ) if ( not i ) bytes[i] = 0x0;
+        if ( this->pattern.size() == this->bytes.size() ) for ( size_t i = 0; i < this->pattern.size(); ++i ) if ( !( i ) ) bytes[i] = 0x0; else;
         else throw( "pattern size not matched with bytes size" );
         return;
     }
@@ -144,25 +151,25 @@ public:
     std::wstring window_name = L"";
 
     template <typename T>
-    T __fastcall read(HANDLE  address);
+    fastfunc T read(HANDLE address);
 
     template <typename T>
-    void __fastcall write(HANDLE address, T value);
+    fastfunc void write(HANDLE address, T value);
 
     template <typename T, size_t N>
     size_t countof(T(&array)[N]);
 
     template <typename T>
-    void parse_memory_area(DWORD addr, short size);
+    void ScanMemoryArea(DWORD addr, short size);
 
     template <typename T>
-    T sequential_read(DWORD address_base, std::vector<DWORD> offsets);
+    T SeqRead(DWORD address_base, std::vector<DWORD> offsets);
 
     template <typename T>
-    void print_array(T arr[]);
+    void PrintArray(T arr[]);
 
     template <typename T>
-    T multiple_jump(T addr, DWORD offsets[], short& jumpCompleted);
+    T JumpMultiOffsets(T addr, DWORD offsets[], short& jumpCompleted);
 
     template<typename T>
     std::vector<DWORD> FindValue(T val);
@@ -183,9 +190,10 @@ public:
 
     HDC GetHDC();
 
-    int read_bytes(LPCVOID addr, int num, void* buf);
+    int read_bytes(LPCVOID addr, int num, void* buf); // C-style writed залупа, пусть название будет в нижнем регистре
 
-    DWORD getMemoryArea(DWORD from, DWORD to, void* type);
+    template<typename T>
+    __forceinline T ReadMemoryArray(ADDRESS start_address, ADDRESS end_address);
 
     bool DataCompare(const BYTE* pData, const BYTE* pMask, const char* pszMask);
 
@@ -217,14 +225,14 @@ public:
     DllModule();
     DllModule(const wchar_t* name);
     const wchar_t* GetName();
-    HANDLE						GetBase();
-    void						SetBase(HANDLE val);
-    void						AddOffset(DWORD val);
-    void						AddOffsets(std::vector<DWORD> offsets);
-    DWORD						GetOffsset(USHORT index);
-    std::vector<DWORD>			GetOffssets();
-    std::pair<HANDLE, DWORD>	GetModuleBaseEnd();
-    DWORD						GetSize();
+    HANDLE GetBase();
+    void SetBase(HANDLE val);
+    void AddOffset(DWORD val);
+    void AddOffsets(std::vector<DWORD> offsets);
+    DWORD GetOffsset(USHORT index);
+    std::vector<DWORD> GetOffssets();
+    std::pair<HANDLE, DWORD> GetModuleBaseEnd();
+    DWORD GetSize();
 
 };
 
@@ -270,17 +278,17 @@ class Iterator
 {
     DWORD64 iter;
 public:
-    Iterator()
+    Iterator(size_t init = 0)
     {
-        this->iter = 0;
+        this->iter = init;
     }
     decltype( iter ) next()
     {
         return ++iter;
     }
-    decltype( iter ) prev()
+    bool prev()
     {
-        return --iter > 0 ? iter : iter = 0;
+        return --iter >= 0 ? true : iter ^= iter, false;
     }
 };
 
@@ -288,7 +296,7 @@ public:
 
 
 template <typename T>
-T __fastcall RAM::read(HANDLE  address)
+fastfunc T RAM::read(HANDLE  address)
 {
     T _read;
     ReadProcessMemory(hProcess, (LPCVOID)address, &_read, sizeof(T), NULL);
@@ -297,7 +305,7 @@ T __fastcall RAM::read(HANDLE  address)
 
 
 template <typename T>
-void __fastcall RAM::write(HANDLE address, T value)
+fastfunc void RAM::write(HANDLE address, T value)
 {
     WriteProcessMemory(hProcess, (LPVOID)address, &value, sizeof(T), NULL);
 }
@@ -311,7 +319,7 @@ size_t RAM::countof(T(&array)[N])
 
 
 template <typename T>
-void RAM::parse_memory_area(DWORD addr, short size)
+void RAM::ScanMemoryArea(DWORD addr, short size)
 {
     T _readbuf;
     while ( !size == 0 )
@@ -322,7 +330,7 @@ void RAM::parse_memory_area(DWORD addr, short size)
 
 
 template <typename T>
-T RAM::sequential_read(DWORD address_base, std::vector<DWORD> offsets/*DWORD address, short bytesToRead*/)
+T RAM::SeqRead(DWORD address_base, std::vector<DWORD> offsets/*DWORD address, short bytesToRead*/)
 {
     /*DWORD _read;
     DWORD _readedArray[64];
@@ -350,14 +358,14 @@ T RAM::sequential_read(DWORD address_base, std::vector<DWORD> offsets/*DWORD add
 
 
 template <typename T>
-void RAM::print_array(T arr[])
+void RAM::PrintArray(T arr[])
 {
     for ( auto i : arr ) std::cout << i << '\n';
 }
 
 
 template <typename T>
-T RAM::multiple_jump(T addr, DWORD offsets[], short& jumpCompleted)
+T RAM::JumpMultiOffsets(T addr, DWORD offsets[], short& jumpCompleted)
 {
     DWORD buf[2];
     short amount_of_jumps = 0;
@@ -520,12 +528,11 @@ DWORD RAM::getMultiModuleHandle()
 }
 
 
-//
 HANDLE RAM::getProcessHandle(const wchar_t* window_name)
 {
     HWND hWnd;
     HDC hDC;
-    hWnd = FindWindow(0, window_name);
+    hWnd = FindWindowW(0, window_name);
     if ( hWnd == 0 )
     {
         printf("FindWindow failed, %08X\n", GetLastError());
@@ -595,7 +602,7 @@ HWND RAM::getWindowHandle(const wchar_t* wch_window_name)
     {
         std::cerr << "HWND getWindowHandle() -> no have window name" << std::endl;
     }
-    hWindow = FindWindow(0, wch_window_name);
+    hWindow = FindWindowW(0, wch_window_name);
     return hWindow;
 }
 
@@ -629,20 +636,18 @@ int RAM::read_bytes(LPCVOID addr, int num, void* buf)
     return 1;
 }
 
-
-DWORD RAM::getMemoryArea(DWORD from, DWORD to, void* type)
+template<typename T>
+fastfunc T RAM::ReadMemoryArray(ADDRESS start_address, ADDRESS end_address)
 {
-    unsigned buf[256];
-    for ( ; from <= to; from++ )
-    {
-        read_bytes((LPCVOID)from, sizeof(type), &buf);
-    }
-    //print_array((char*)buf, NULL);
-    return (DWORD)buf;
+    end_address -= end_address % sizeof(T);
+    T* buf = new T[end_address - start_address / sizeof(T)];
+    for ( ; start_address <= end_address; start_address++ )
+        read_bytes((LPCVOID)start_address, sizeof(T), &buf);
+    return buf;
 }
 
 
-FORCEINLINE bool RAM::DataCompare(const BYTE* pData, const BYTE* pMask, const char* pszMask)
+fastfunc bool RAM::DataCompare(const BYTE* pData, const BYTE* pMask, const char* pszMask)
 {
     for ( ; *pszMask; ++pszMask, ++pData, ++pMask )
     {
@@ -658,7 +663,7 @@ FORCEINLINE bool RAM::DataCompare(const BYTE* pData, const BYTE* pMask, const ch
 //find pattern in address space of process
 DWORD RAM::FindPattern( DWORD start, DWORD size, LPCSTR sig, LPCSTR mask )
 {
-    BYTE* data = new BYTE[ size ];  // TODO: вызывает bad allocation из-за попытки аллокации APP SIZE количества байтов(дохуя короче)
+    BYTE* data = new BYTE[ size ];
     DWORD bytesread = NULL;
     if ( !ReadProcessMemory( hProcess, ( LPCVOID ) start, data, size, ( SIZE_T* ) &bytesread ) )
     {
@@ -793,9 +798,6 @@ bool RAM::IsMemoryReadable(void* ptr, size_t byteCount)
     if ( temp_mbi.Protect == PAGE_NOACCESS || temp_mbi.Protect == PAGE_EXECUTE )
         return false;
 
-      // This checks that the start of memory block is in the same "region" as the
-      // end. If it isn't you "simplify" the problem into checking that the rest of 
-      // the memory is readable.
     size_t blockOffset = (size_t)( (char*)ptr - (char*)temp_mbi.AllocationBase );
     size_t blockBytesPostPtr = temp_mbi.RegionSize - blockOffset;
 
