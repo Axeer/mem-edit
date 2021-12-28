@@ -296,7 +296,7 @@ public:
 
 
 template <typename T>
-T fastfunc RAM::read(HANDLE  address)
+fastfunc T RAM::read(HANDLE  address)
 {
     T _read;
     ReadProcessMemory(hProcess, (LPCVOID)address, &_read, sizeof(T), NULL);
@@ -305,7 +305,7 @@ T fastfunc RAM::read(HANDLE  address)
 
 
 template <typename T>
-void fastfunc RAM::write(HANDLE address, T value)
+fastfunc void RAM::write(HANDLE address, T value)
 {
     WriteProcessMemory(hProcess, (LPVOID)address, &value, sizeof(T), NULL);
 }
