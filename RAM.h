@@ -112,7 +112,7 @@ public:
     {
         this->bytes = bytes;
         this->pattern = pattern;
-        if ( this->pattern.size() == this->bytes.size() ) for ( size_t i = 0; i < this->pattern.size(); ++i ) if ( !(i) ) bytes[i] = 0x0;
+        if ( this->pattern.size() == this->bytes.size() ) for ( size_t i = 0; i < this->pattern.size(); ++i ) if ( !( i ) ) bytes[i] = 0x0; else;
         else throw( "pattern size not matched with bytes size" );
         return;
     }
