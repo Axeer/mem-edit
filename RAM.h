@@ -689,56 +689,6 @@ fastfunc bool RAM::DataCompare(const BYTE* pData, const BYTE* pMask, const char*
     return ( *pszMask == NULL );
 }
 
-/*
-//find pattern in address space of process
-DWORD RAM::FindPattern( DWORD start, DWORD size, LPCSTR sig, LPCSTR mask )
-{
-    BYTE* data = new BYTE[ size ];
-    DWORD bytesread = NULL;
-    if ( !ReadProcessMemory( hProcess, ( LPCVOID ) start, data, size, ( SIZE_T* ) &bytesread ) )
-    {
-        return NULL;
-    }
-    for ( DWORD i = 0; i < size; i++ )
-    {
-        if ( DataCompare( ( CONST BYTE* )( data + i ), ( CONST BYTE* )sig, mask ) )
-        {
-            delete( data );
-            return start + i;
-        }
-    }
-    return NULL;
-}
-*/
-/*
-//find pattern in address space of process
-DWORD RAM::FindPattern( DWORD start, DWORD size, LPCSTR sig, LPCSTR mask )
-{
-    std::pair<DWORD, DWORD> base = std::make_pair(start, 0);
-    DWORD def_size = strlen( mask );
-    DWORD bytesread = NULL;
-    for(DWORD x = 0;size >= def_size; size -= def_size)
-    {
-
-        auto i = std::make_pair( ( BYTE* ) new BYTE[ def_size ], ( DWORD ) def_size );
-        auto len = i.second;
-        ReadProcessMemory( hProcess, ( LPCVOID ) start, i.first, len, ( SIZE_T* ) &bytesread );
-        start += 1;
-
-        //for ( DWORD ii = 0; ii < len; ii++ )
-        //{
-        if ( DataCompare( ( CONST BYTE* )( i.first ), ( CONST BYTE* )sig, mask ) )
-        {
-            return base.first + base.second;
-        }
-        base.second += 1;
-        //}
-        delete( i.first );
-    }
-    return NULL;
-}
-*/
-
 //find pattern in address space of process
 DWORD RAM::FindPattern(DWORD start, DWORD size, LPCSTR sig, LPCSTR mask)
 {
