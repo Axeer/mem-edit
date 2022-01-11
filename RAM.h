@@ -1,5 +1,4 @@
-﻿//last changes: 28.12.2021
-#pragma once
+﻿#pragma once
 
 #include <Windows.h>
 #include <chrono>
@@ -18,7 +17,7 @@
 #include <iomanip>
 #include <array>
 
-typedef DWORD64 ADDRESS;
+typedef size_t ADDRESS;
 typedef std::wstring wstr;
 #define fastfunc __forceinline
 typedef unsigned char byte;
@@ -34,43 +33,8 @@ byte new_wstrcmp(const wchar_t* str1, const wchar_t* str2);
 
 int wstrcmp(const wchar_t* str1, const wchar_t* str2)
 {
-    short sh_strIndex = 0;
-    short symbols_ident = 0;
-    short symbols_remaining = 0;
-    if ( str1[sh_strIndex] == '\0' || str2[sh_strIndex] == '\0' )
-        return 0xfff;
-    while ( str1[sh_strIndex] != '\0' && str2[sh_strIndex] != '\0' )
-    {
-        if ( str1[sh_strIndex] == str2[sh_strIndex] )
-            symbols_ident++;
-        //check if first word end
-        if ( str1[sh_strIndex] == '\0' && str2[sh_strIndex] != '\0' )
-        {
-            for ( ; str2[sh_strIndex] != '\0'; symbols_remaining++ )
-            {
-                sh_strIndex++;
-            }
-            return symbols_remaining;
-        }
-        //check if second word end
-        if ( str1[sh_strIndex] != '\0' && str2[sh_strIndex] == '\0' )
-        {
-            for ( ; str1[sh_strIndex] != '\0'; symbols_remaining++ )
-            {
-                sh_strIndex++;
-            }
-            return symbols_remaining;
-        }
-        sh_strIndex++;
-    }
-    //for (int i_str2Length =0;str2[i_str2Length]!='\0';i_str2Length++)
-    //for (int i_str1Length = 0; str1[i_str1Length] != '\0'; i_str1Length++)
-        //if (j == i_str2Length) {
-    if ( str1[sh_strIndex] == '\0' && str2[sh_strIndex] == '\0' && symbols_ident != 0 && symbols_remaining == 0 )
-        return 0;
-    //}
-    else return 0x8000;
-};
+    return std::wstring(str1).compare(std::wstring(str2));
+}
 
 byte new_wstrcmp(const wchar_t* str1, const wchar_t* str2)
 {
@@ -362,14 +326,6 @@ void RAM::ScanMemoryArea(DWORD addr, short size)
 template <typename T>
 T RAM::SeqRead(DWORD address_base, std::vector<DWORD> offsets/*DWORD address, short bytesToRead*/)
 {
-    /*DWORD _read;
-    DWORD _readedArray[64];
-    short bytesCount;
-    if (bytesToRead > 64) { int i; int *b = &i; std::cout<<b; }
-    for (int i = 0; i <= bytesToRead; i++, bytesCount++) {
-        ReadProcessMemory(hProcess, (address + i * sizeof(T)), &_read, sizeof(T));
-    }
-    return { _readedArray, bytesCount };*/
     ADDRESS base_point = this->read<DWORD>(address_base);
     T out;
     USHORT counter = offsets.size();
@@ -383,7 +339,6 @@ T RAM::SeqRead(DWORD address_base, std::vector<DWORD> offsets/*DWORD address, sh
         }
         base_point = this->read<DWORD>(base_point + i);
     }
-
 }
 
 
@@ -520,12 +475,14 @@ std::pair<HANDLE, DWORD>RAM::GetModule(const wchar_t* modulename)
     HANDLE h_module = CreateToolhelp32Snapshot(TH32CS_SNAPMODULE, dwProcId);
     MODULEENTRY32 mEntry;
     mEntry.dwSize = sizeof(mEntry);
+
     if ( (DWORD)hProcess == (DWORD)0x0 )
     {
-        std::cerr << "HANDLE GetModule() -> no have handle of process" << std::endl;
-        throw "no handle of process\n";
+        std::cerr << "HANDLE GetModule() -> No have handle of process" << std::endl;
+        throw "HANDLE GetModule() -> No have handle of process";
         exit(0xAB0BA);
     }
+
     do
     {
         if ( !new_wstrcmp((wchar_t*)mEntry.szModule, (wchar_t*)modulename) )
@@ -936,22 +893,34 @@ DWORD DllModule::GetSize()
     return this->module_base_size.second;
 }
 
+
 class Application
 {
     SYSTEM_INFO system_info;
     RAM Ram;
 public:
+    std::wstring Name;
+
     Application()
     {
         memset(&this->system_info, 0, sizeof(system_info));
         GetSystemInfo(&system_info);
+
+        WCHAR tmp[MAX_PATH];
+        HMODULE hThis = NULL;
+        GetModuleFileNameW(hThis, tmp, MAX_PATH);
+        this->Name = std::wstring(tmp);
+
+        Ram.GetProcessHandle(this->Name.c_str());
     }
 
-    Application(LPCWSTR process_name) // Должно скончывацца на .exe
+    Application(LPCWSTR process_name) // Повинно закiнчуватися на .exe
     {
+        this->Name = std::wstring(process_name);
         memset(&this->system_info, 0, sizeof(system_info));
         GetSystemInfo(&system_info);
-        Ram.process_name = process_name;
+
+        Ram.GetProcessHandle(process_name);
     }
 
     std::pair<LPVOID, LPVOID> GetBaseEnd()
@@ -959,3 +928,5 @@ public:
         return std::make_pair(system_info.lpMinimumApplicationAddress, system_info.lpMaximumApplicationAddress);
     }
 };
+
+Application this_application = Application();
