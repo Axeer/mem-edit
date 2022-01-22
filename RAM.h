@@ -16,6 +16,7 @@
 #include <sstream>
 #include <iomanip>
 #include <array>
+#include <utility>
 
 typedef size_t ADDRESS;
 typedef std::wstring wstr;
@@ -29,6 +30,7 @@ typedef unsigned char byte;
 
 int wstrcmp(const wchar_t* str1, const wchar_t* str2);
 byte new_wstrcmp(const wchar_t* str1, const wchar_t* str2);
+
 
 
 int wstrcmp(const wchar_t* str1, const wchar_t* str2)
@@ -125,6 +127,15 @@ public:
 };
 
 
+struct WinapiHandles
+{
+    HWND window{0};
+    std::vector<HANDLE> handles{};
+    std::vector<DWORD> processid{};
+    std::vector<HMODULE> modules{};
+};
+
+
 class RAM
 {
 public:
@@ -204,7 +215,10 @@ public:
     void WaitProcess(std::wstring process_name, std::wstring window_name);
     void WaitProcess(std::wstring process_name);
     void WaitProcess();
-};
+
+    void GetWindow();
+    HWND FindTopWindow(DWORD pid);
+}ram;
 
 
 class DllModule
@@ -810,6 +824,7 @@ void RAM::WaitProcess(std::wstring process_name)
     }
 }
 
+
 void RAM::WaitProcess()
 {
     if ( this->process_name == L"" || this->window_name == L"" )
@@ -819,7 +834,44 @@ void RAM::WaitProcess()
             return;
 }
 
-RAM ram;
+
+void RAM::GetWindow()
+{
+    if ( this->dwProcId )
+    {
+
+    }
+}
+
+
+HWND RAM::FindTopWindow(DWORD pid)
+{
+    std::pair<HWND, DWORD> params = { 0, pid };
+
+    BOOL bResult = EnumWindows([](HWND hwnd, LPARAM lParam) -> BOOL
+    {
+        auto pParams = ( std::pair<HWND, DWORD>* )( lParam );
+
+        DWORD processId;
+        if ( GetWindowThreadProcessId(hwnd, &processId) && processId == pParams->second )
+        {
+            SetLastError(-1);
+            pParams->first = hwnd;
+            return FALSE;
+        }
+
+        return TRUE;
+    }, (LPARAM)&params);
+
+    if ( !bResult && GetLastError() == -1 && params.first )
+    {
+        return params.first;
+    }
+
+    return 0;
+}
+
+
 
 DllModule::DllModule()
 {
@@ -928,5 +980,6 @@ public:
         return std::make_pair(system_info.lpMinimumApplicationAddress, system_info.lpMaximumApplicationAddress);
     }
 };
+
 
 Application this_application = Application();
