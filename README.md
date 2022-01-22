@@ -5,6 +5,7 @@
 <b> Пример использования</b>
 
 ```cpp
+#include "RAM.h"
 int main(){
     Application app(L"firefox.exe");
     DllModule modules[] = { 
