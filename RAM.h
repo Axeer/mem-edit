@@ -18,10 +18,18 @@
 #include <array>
 #include <utility>
 
+using namespace std::string_literals;
+
+typedef long long ll;
+typedef unsigned long long ull;
+
 typedef size_t ADDRESS;
+typedef size_t index;
 typedef std::wstring wstr;
-#define fastfunc __forceinline
 typedef unsigned char byte;
+
+#define fastfunc __forceinline
+
 
 #ifndef UNICODE
 #define _T(x) L##x
@@ -57,6 +65,7 @@ byte new_wstrcmp(const wchar_t* str1, const wchar_t* str2)
     return equal;
 }
 
+
 class Pattern
 {
     bool match(std::vector<BYTE, std::allocator<BYTE>> bytes)
@@ -67,42 +76,113 @@ class Pattern
 
     bool match(std::vector<bool, std::allocator<bool>> pattern)
     {
-        if ( this->pattern.size() == pattern.size() ) return static_cast<bool>( std::equal(this->pattern.begin(), this->pattern.end(), pattern.begin()) );
+        if ( this->mask.size() == pattern.size() ) return static_cast<bool>( std::equal(this->mask.begin(), this->mask.end(), pattern.begin()) );
         return 0;
+    }
+
+    std::string open(std::string str, ull iterator, ull total_nums, ull count)
+    {
+        if ( !total_nums ) return str;
+        auto before_star = [](ull iterator_onstar){return iterator_onstar-1;};
+        char sym = str[before_star(iterator)];
+        index index_symbol = before_star(iterator);
+        byte bt = this->bytes[before_star(iterator)];
+        bool ms = this->mask[before_star(iterator)];
+
+        str.erase(std::distance(mask_str.begin(), mask_str.begin() + before_star(iterator)), 2 + total_nums);
+        this->bytes.erase(this->bytes.begin() + before_star(iterator));
+        this->mask.erase(this->mask.begin() + before_star(iterator));
+
+        this->bytes.insert(this->bytes.begin() + before_star(iterator), count, bt);
+        this->mask.insert(this->mask.begin() + before_star(iterator), count, ms);
+        str.insert(before_star(iterator), count, sym);
+
+        return str;
+    }
+
+    std::pair<ull, ull> count_nums(ull current_iterator)
+    {
+        ull sum_nums, total_nums, i; sum_nums = total_nums = 0; i = 1;
+        do
+        {
+            if ( this->mask_str[current_iterator + i] >= '0' and this->mask_str[current_iterator + i] <= '9' )
+            {
+                sum_nums += this->mask_str[current_iterator + i] - '0';
+                total_nums++;
+            }
+            else break;
+        }
+        while ( i++ );
+        current_iterator++;
+        std::string num_slice = this->mask_str.substr(current_iterator, total_nums);
+        sum_nums = std::stoi(num_slice);
+        return std::pair<ull,ull>(total_nums, sum_nums);
+    }
+
+    void parse()
+    {
+        for ( ull iterator = 0; iterator < this->mask_str.size(); iterator++ )
+        {
+            switch ( this->mask_str[iterator] )
+            {
+                case 'x': break;
+                case '?': if(this->mask_str[iterator + 1] == '*') break; this->bytes[iterator] = 0; this->mask[iterator] = false; break;
+                case '*':
+                {
+                    auto tmp = count_nums(iterator);
+                    this->mask_str = open(this->mask_str, iterator, tmp.first, tmp.second);
+                    parse();
+
+                }; break;
+            }
+        }
     }
 
 public:
     std::vector<BYTE> bytes;
-    std::vector<bool> pattern; // 1 - defined, 0 - undefined
-
+    std::vector<bool> mask; // 1 - defined, 0 - undefined
+    std::string mask_str;
     Pattern(std::vector<BYTE> bytes, std::vector<bool> pattern)
     {
         this->bytes = bytes;
-        this->pattern = pattern;
-        if ( this->pattern.size() == this->bytes.size() ) for ( size_t i = 0; i < this->pattern.size(); ++i ) if ( !( i ) ) this->bytes[i] = 0b0; else;
-        else throw( "pattern size not matched with bytes size" );
+        this->mask = pattern;
+        auto index = [=](auto const& iterator)
+        {
+            return std::distance(this->mask.begin(), iterator);
+        };
+        if ( this->mask.size() == this->bytes.size() ) for ( auto i = this->mask.begin(); i != this->mask.end(); ++i ) if ( !( *i ) ) this->bytes[index(i)] = 0b0; else;
+        else throw( "pattern size not matched with bytes size"s );
         return;
     }
 
     Pattern(std::vector<BYTE> bytes)
     {
         this->bytes = bytes;
-        this->pattern = {};
-        this->pattern.resize(this->bytes.size(), 1);
-        for ( size_t i = 0; i < this->bytes.size(); ++i ) if ( !( this->bytes[i] ) ) this->pattern[i] = 0b0; else;
+        this->mask = {};
+        this->mask.resize(this->bytes.size(), 1);
+        for ( size_t i = 0; i < this->bytes.size(); ++i ) if ( !( this->bytes[i] ) ) this->mask[i] = 0b0; else;
+        return;
+    }
+
+    Pattern(std::vector<BYTE> bytes, std::string str_mask)
+    {
+        this->bytes = bytes;
+        this->mask.resize(this->bytes.size(), true);
+        this->mask_str = str_mask;
+        this->parse();
         return;
     }
 
     Pattern()
     {
         this->bytes = {};
-        this->pattern = {};
+        this->mask = {};
         return;
     }
 
     bool operator==(Pattern pattern2)
     {
-        return ( match(pattern2.bytes) && match(pattern2.pattern) );
+        return ( match(pattern2.bytes) && match(pattern2.mask) );
     }
 
     std::wstring operator<<(Pattern)
@@ -113,12 +193,12 @@ public:
         {
             wss << std::to_wstring(this->bytes[i])
                 << std::wstring(L"\t->\t")
-                << std::to_wstring(this->pattern[i])
+                << std::to_wstring(this->mask[i])
                 << std::endl;
 
             tmp += ( std::to_wstring(this->bytes[i])
                     + std::wstring(L"\t->\t")
-                    + std::to_wstring(this->pattern[i])
+                    + std::to_wstring(this->mask[i])
                     + std::wstring(L"\n") );
 
         }
@@ -135,25 +215,28 @@ struct WinapiHandles
     std::vector<HMODULE> modules{};
 };
 
+class Offset
+{
+    std::vector<ADDRESS> addresses;
+};
 
 class RAM
 {
 public:
-    DWORD pid;
-    DWORD module_dll_base;
-    DWORD dwProcId;
+    ULONG dw_rights = PROCESS_QUERY_INFORMATION | PROCESS_VM_READ;
     const char* module_dll = "\0";
-    HANDLE hProcess;
-    HWND hWindow;
-    HDC hDC;
-
+    MEMORY_BASIC_INFORMATION mbi;
+    std::wstring process_name;
+    std::wstring window_name;
+    bool has_window = true;
+    DWORD module_dll_base;
     HANDLE handles[32];
+    HANDLE hProcess;
+    DWORD dwProcId;
     HMODULE hMods;
-
-    MEMORY_BASIC_INFORMATION    mbi;
-
-    std::wstring process_name = L"";
-    std::wstring window_name = L"";
+    HWND hWindow;
+    DWORD pid;
+    HDC hDC;
 
     template <typename T>
     fastfunc T read(HANDLE address);
@@ -165,7 +248,7 @@ public:
     size_t countof(T(&array)[N]);
 
     template <typename T>
-    void ScanMemoryArea(DWORD addr, short size);
+    void ScanMemoryArea(ADDRESS start, ADDRESS end);
 
     template <typename T>
     T SeqRead(DWORD address_base, std::vector<DWORD> offsets);
@@ -195,16 +278,20 @@ public:
 
     HDC GetHDC();
 
-    int read_bytes(LPCVOID addr, int num, void* buf); // C-style writed залупа, пусть название будет в нижнем регистре
+    int read_bytes(LPCVOID addr, int num, void* buf);
 
     template<typename T>
     fastfunc T ReadMemoryArray(ADDRESS start_address, ADDRESS end_address);
 
+    bool DataCompare(const BYTE* pData, const BYTE* pMask, const char* pszMask, size_t size);
     bool DataCompare(const BYTE* pData, const BYTE* pMask, const char* pszMask);
 
-    DWORD FindPattern(DWORD start, DWORD size, LPCSTR sig, LPCSTR mask);//find pattern in address space of process
+    DWORD FindPattern(DWORD start, DWORD size, CONST BYTE* sig, LPCSTR mask, size_t masksize);
+    DWORD FindPattern(DWORD start, DWORD size, CONST BYTE* sig, LPCSTR mask);
 
     DWORD FindPatternArray(DWORD start, DWORD size, LPCSTR mask, int count, ...);//find pattern array in address space of process
+    DWORD FindPatternArray(DWORD start, DWORD size, std::string mask, ...);
+    DWORD FindPatternArray(DWORD start, DWORD size, Pattern pattern);
 
     std::vector<DWORD> FindAllPatterns(DWORD startAddress, DWORD size, LPCSTR mask, int patterns_counter, std::vector<BYTE> sign);
 
@@ -217,21 +304,24 @@ public:
     void WaitProcess();
 
     void GetWindow();
-    HWND FindTopWindow(DWORD pid);
+    HWND FindTopWindow();
 }ram;
 
 
 class DllModule
 {
-    HANDLE handle_base;
-    DWORD module_size;
+    std::pair < HANDLE, DWORD >	module_base_size;
     std::vector < DWORD > offsets;
     const wchar_t* name;
-    std::pair < HANDLE, DWORD >	module_base_size;
+    HANDLE handle_base;
+    DWORD module_size;
+    RAM *ram_ptr;
 public:
 
     DllModule();
     DllModule(const wchar_t* name);
+    DllModule(const wchar_t* name, RAM ram);
+
     const wchar_t* GetName();
     HANDLE GetBase();
     void SetBase(HANDLE val);
@@ -241,8 +331,10 @@ public:
     std::vector<DWORD> GetOffssets();
     std::pair<HANDLE, DWORD> GetModuleBaseEnd();
     DWORD GetSize();
-
+    void WithInstance(RAM *ram);
+    void GetModule(std::wstring module_name);
 };
+
 
 template <typename DataType>
 class Item
@@ -253,6 +345,7 @@ public:
     std::vector<DWORD> addresses;
     std::vector<DataType> values;
 };
+
 
 class Rand
 {
@@ -282,33 +375,37 @@ public:
     }
 };
 
+
+template<typename T>
 class Iterator
 {
-    size_t val;
+    T val;
 public:
-    Iterator(size_t init = 0)
-    {
-        this->val = init;
-    }
-    decltype( val ) next()
+    Iterator(size_t init = 0) : val(init)
+    { }
+    T next()
     {
         return ++val;
     }
-    bool prev()
+    T prev()
     {
-        return --val >= 0 ? true : val ^= val, false;
+        return --val >= 0 ? val : throw( "iterator < 0"s );
+    }
+    T get()
+    {
+        return val;
     }
 };
-
-
 
 
 template <typename T>
 fastfunc T RAM::read(HANDLE  address)
 {
-    T _read;
-    ReadProcessMemory(hProcess, (LPCVOID)address, &_read, sizeof(T), NULL);
-    return _read;
+    static T _read;
+    static size_t _bytesread = 0;
+    ReadProcessMemory(hProcess, (LPCVOID)address, &_read, sizeof(T), &_bytesread);
+    if ( !( _bytesread ) || ( sizeof(T) != _bytesread ) ) std::cerr << "read -> cannot read memory\n";
+    else return _read;
 }
 
 
@@ -327,18 +424,20 @@ size_t RAM::countof(T(&array)[N])
 
 
 template <typename T>
-void RAM::ScanMemoryArea(DWORD addr, short size)
+void RAM::ScanMemoryArea(ADDRESS start, ADDRESS end)
 {
-    T _readbuf;
-    while ( !size == 0 )
-    {
-        ReadProcessMemory(hProcess, addr, &_readbuf, sizeof(addr), NULL);
-    }
+    T _readbuf = 0;
+    size_t _bytesread = 0;
+
+    ReadProcessMemory(hProcess, start, &_readbuf, sizeof(T), &_bytesread);
+
+    if ( _bytesread != 0 && start <= end )
+        ScanMemoryArea(start += sizeof(T));
 }
 
 
 template <typename T>
-T RAM::SeqRead(DWORD address_base, std::vector<DWORD> offsets/*DWORD address, short bytesToRead*/)
+T RAM::SeqRead(DWORD address_base, std::vector<DWORD> offsets)
 {
     ADDRESS base_point = this->read<DWORD>(address_base);
     T out;
@@ -429,7 +528,6 @@ std::vector<DWORD> RAM::FindValue(T val)
 }
 
 
-//
 int RAM::CompareModules(wchar_t* str1, wchar_t* str2)
 {
     unsigned long str1_symbols = 0;
@@ -487,13 +585,15 @@ std::pair<HANDLE, DWORD>RAM::GetModule(const wchar_t* modulename)
 {
 
     HANDLE h_module = CreateToolhelp32Snapshot(TH32CS_SNAPMODULE, dwProcId);
+    std::string_view error = "HANDLE GetModule() -> No have handle of process"s;
+
     MODULEENTRY32 mEntry;
     mEntry.dwSize = sizeof(mEntry);
 
     if ( (DWORD)hProcess == (DWORD)0x0 )
     {
-        std::cerr << "HANDLE GetModule() -> No have handle of process" << std::endl;
-        throw "HANDLE GetModule() -> No have handle of process";
+        std::cerr << error << std::endl;
+        throw error;
         exit(0xAB0BA);
     }
 
@@ -578,7 +678,6 @@ HANDLE RAM::getProcessHandle(const wchar_t* window_name)
 
 DWORD RAM::GetProcessHandle(const wchar_t* process_name_exe)
 {
-    DWORD dw_rights = PROCESS_VM_READ;
     HANDLE handle = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, NULL);
 
     PROCESSENTRY32 entry;
@@ -604,13 +703,14 @@ HWND RAM::getWindowHandle(const wchar_t* wch_window_name)
         std::cerr << "HWND getWindowHandle() -> no have window name" << std::endl;
     }
     hWindow = FindWindowW(0, wch_window_name);
+    if ( !hWindow ) has_window = false;
     return hWindow;
 }
 
 
 HDC RAM::GetHDC()
 {
-    if ( hWindow != NULL )
+    if ( hWindow != NULL && has_window )
     {
         this->hDC = GetWindowDC(hWindow);
         if ( this->hDC != NULL )
@@ -620,8 +720,7 @@ HDC RAM::GetHDC()
         std::cout << "invalid hdc handle" << std::endl;
         throw "invalid hdc handle";
     }
-    std::cout << "no have window handle" << std::endl;
-    throw "no have window handle";
+    std::cout << "This app have no visible windows" << std::endl;
 }
 
 
@@ -636,6 +735,7 @@ int RAM::read_bytes(LPCVOID addr, int num, void* buf)
     }
     return 1;
 }
+
 
 template<typename T>
 fastfunc T RAM::ReadMemoryArray(ADDRESS start_address, ADDRESS end_address)
@@ -660,15 +760,63 @@ fastfunc bool RAM::DataCompare(const BYTE* pData, const BYTE* pMask, const char*
     return ( *pszMask == NULL );
 }
 
-//find pattern in address space of process
-DWORD RAM::FindPattern(DWORD start, DWORD size, LPCSTR sig, LPCSTR mask)
+
+fastfunc bool RAM::DataCompare(const BYTE* readed_data, const BYTE* signature, const char* mask, size_t size)
+{   
+    size_t i = 0;
+    for ( ; i < size; ++i, ++readed_data )
+    {
+        if ( mask[i] == 'x' && *readed_data != signature[i] )
+        {
+            return false;
+        }
+    }
+    return ( i != NULL );
+}
+
+
+DWORD RAM::FindPattern(DWORD start, DWORD size, CONST BYTE* sig, LPCSTR mask, size_t masksize)
 {
-    BYTE* data = new BYTE[size];  // TODO: вызывает bad allocation из-за попытки аллокации APP SIZE количества байтов(отладчик ловит на ресурслимите)
-    DWORD bytesread = NULL;
-    ReadProcessMemory(hProcess, (LPCVOID)start, data, size, (SIZE_T*)&bytesread);
+    if ( !size ) throw "zero bytes to compare"s;
+
+    BYTE* data = new BYTE[size+1];
+    std::fill_n(data, size + 1, 0);
+    SIZE_T bytesread = NULL;
+
+    // Проверка на защиту памяти от чтения
+    if ( !this->IsMemoryReadable((void*)start, size) ) std::cerr << "cannot read memory" << ": " << "Memory block is not readable by protect" << std::endl;
+
+    ReadProcessMemory(hProcess, (LPCVOID)start, data, size, &bytesread);
+    if ( bytesread <= 0 )
+        std::cerr << "cannot read memory" << ": " << "error:" << " " << GetLastError() << std::endl;
+        throw "FindPattern -> cannot read memory"s;
+
     for ( DWORD i = 0; i < size; i++ )
     {
-        if ( DataCompare(( CONST BYTE* )( data + i ), ( CONST BYTE* )sig, mask) )
+        if ( DataCompare(( CONST BYTE* )( data + i ), ( CONST BYTE* )sig, mask, masksize) )
+        {
+            delete( data );
+            return start + i;
+        }
+    }
+
+    delete( data );
+    return NULL;
+}
+
+
+DWORD RAM::FindPattern(DWORD start, DWORD size, CONST BYTE* sig, LPCSTR mask)
+{
+    if ( !size ) throw "zero bytes to compare"s;
+
+    BYTE* data = new BYTE[size];
+    SIZE_T bytesread = NULL;
+    ReadProcessMemory(hProcess, (LPCVOID)start, data, size, &bytesread);
+    if ( bytesread <= 0 )
+        throw "FindPattern -> cannot read memory"s;
+    for ( DWORD i = 0; i < size; i++ )
+    {
+        if ( DataCompare(( CONST BYTE* )( data + i ), ( CONST BYTE* )sig, mask))
         {
             delete( data );
             return start + i;
@@ -678,10 +826,10 @@ DWORD RAM::FindPattern(DWORD start, DWORD size, LPCSTR sig, LPCSTR mask)
     return NULL;
 }
 
-//find pattern array in address space of process
+
 DWORD RAM::FindPatternArray(DWORD start, DWORD size, LPCSTR mask, int count, ...)
 {
-    char* sig = new char[count + 1];
+    byte* sig = new byte[count + 1];
     va_list ap;
     va_start(ap, count);
     for ( int i = 0; i < count; i++ )
@@ -692,15 +840,46 @@ DWORD RAM::FindPatternArray(DWORD start, DWORD size, LPCSTR mask, int count, ...
     }
     va_end(ap);
     sig[count] = '\0';
-    return FindPattern(start, size, sig, mask);
+    return FindPattern(start, size, sig, mask, count);
+}
+
+
+//TODO:
+//FIXME:
+DWORD RAM::FindPatternArray(DWORD start, DWORD size, std::string mask, ...)
+{
+    size_t count = mask.size();
+    byte* sig = new byte[count + 1];
+    va_list ap;
+    va_start(ap, count);
+    for ( int i = 0; i < count; i++ )
+    {
+        char read = va_arg(ap, char);
+        sig[i] = read;
+
+    }
+    va_end(ap);
+    sig[count] = '\0';
+    return FindPattern(start, size, sig, mask.c_str(), mask.size());
+}
+
+
+DWORD RAM::FindPatternArray(DWORD start, DWORD size, Pattern pattern)
+{
+    byte* sig = new byte[pattern.bytes.size()+1];
+    for ( size_t i = 0; i < pattern.bytes.size(); ++i )
+        sig[i] = pattern.bytes[i];
+    sig[pattern.bytes.size()] = '\0';
+
+    LPCSTR mask = pattern.mask_str.c_str();
+    return FindPattern(start, size, sig, mask, pattern.bytes.size());
 }
 
 
 std::vector<DWORD> RAM::FindAllPatterns(DWORD startAddress, DWORD end_address, LPCSTR mask, int patterns_counter, std::vector<BYTE> sign)
-// TODO: отьедает дохера памяти, исправить.
 {
     auto count = sign.size();
-    char* sig = new char[count + 1];
+    byte* sig = new byte[count + 1];
     for ( int i = 0; i < count; i++ )
     {
         char read = sign[i];
@@ -760,6 +939,7 @@ bool RAM::IsMemoryReadable(void* ptr, size_t byteCount)
     return true;
 }
 
+
 ADDRESS RAM::VerificatePattern(ADDRESS pattern2verificate, std::pair<ADDRESS, ADDRESS> range, LPCSTR mask, std::vector<BYTE> pattern_sign)
 // Эта штука должна находить байтовый паттерн, который может находиться только рядом с нужным адресом
 // pattern2verificate - адрес, от которого искать
@@ -768,7 +948,7 @@ ADDRESS RAM::VerificatePattern(ADDRESS pattern2verificate, std::pair<ADDRESS, AD
 // паттерн для верификации должен отличаться от верифицируемого паттерна
 {
     auto count = pattern_sign.size();
-    char* sig = new char[count + 1];
+    byte* sig = new byte[count + 1];
     for ( int i = 0; i < count; i++ )
     {
         char read = pattern_sign[i];
@@ -839,13 +1019,21 @@ void RAM::GetWindow()
 {
     if ( this->dwProcId )
     {
-
+        this->hWindow = this->FindTopWindow();
+        this->GetHDC();
+    }
+    else
+    {
+        this->hWindow = this->getWindowHandle(this->window_name.c_str());
     }
 }
 
 
-HWND RAM::FindTopWindow(DWORD pid)
+HWND RAM::FindTopWindow()
 {
+    if ( !this->dwProcId )
+        throw "FindTopWindow -> Cannot get process id"s;
+    DWORD pid = this->dwProcId;
     std::pair<HWND, DWORD> params = { 0, pid };
 
     BOOL bResult = EnumWindows([](HWND hwnd, LPARAM lParam) -> BOOL
@@ -857,10 +1045,10 @@ HWND RAM::FindTopWindow(DWORD pid)
         {
             SetLastError(-1);
             pParams->first = hwnd;
-            return FALSE;
+            return false;
         }
 
-        return TRUE;
+        return true;
     }, (LPARAM)&params);
 
     if ( !bResult && GetLastError() == -1 && params.first )
@@ -882,6 +1070,16 @@ DllModule::DllModule()
 
 
 DllModule::DllModule(const wchar_t* name)
+{
+    offsets.clear();
+    this->name = name;
+    module_base_size = ram_ptr->GetModule(this->name);
+    handle_base = module_base_size.first;
+    module_size = module_base_size.second;
+}
+
+
+DllModule::DllModule(const wchar_t* name, RAM ram)
 {
     offsets.clear();
     this->name = name;
@@ -946,12 +1144,29 @@ DWORD DllModule::GetSize()
 }
 
 
+void DllModule::WithInstance(RAM *ram)
+{
+    this->ram_ptr = ram;
+}
+
+
+void DllModule::GetModule(std::wstring module_name)
+{
+    offsets.clear();
+    this->name = module_name.c_str();
+    module_base_size = ram_ptr->GetModule(this->name);
+    handle_base = module_base_size.first;
+    module_size = module_base_size.second;
+}
+
+
 class Application
 {
     SYSTEM_INFO system_info;
-    RAM Ram;
 public:
     std::wstring Name;
+    RAM Ram;
+    std::vector<DllModule> Dlls;
 
     Application()
     {
@@ -961,18 +1176,21 @@ public:
         WCHAR tmp[MAX_PATH];
         HMODULE hThis = NULL;
         GetModuleFileNameW(hThis, tmp, MAX_PATH);
-        this->Name = std::wstring(tmp);
-
+        auto wtmp = std::wstring(tmp);
+        this->Name = std::wstring(wtmp.begin() + std::distance(wtmp.begin(), wtmp.begin() + wtmp.find_last_of(L'\\') + 1), wtmp.end());
+        Ram.process_name = std::wstring(this->Name);
         Ram.GetProcessHandle(this->Name.c_str());
     }
 
     Application(LPCWSTR process_name) // Повинно закiнчуватися на .exe
     {
         this->Name = std::wstring(process_name);
+        Ram.process_name = std::wstring(process_name);
         memset(&this->system_info, 0, sizeof(system_info));
         GetSystemInfo(&system_info);
 
         Ram.GetProcessHandle(process_name);
+        Ram.GetWindow();
     }
 
     std::pair<LPVOID, LPVOID> GetBaseEnd()
