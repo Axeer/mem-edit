@@ -1,6 +1,5 @@
 ﻿#pragma once
 
-#include <Windows.h>
 #include <chrono>
 #include <thread>
 #include <TlHelp32.h>
@@ -12,57 +11,42 @@
 #include <tlhelp32.h>
 #include <psapi.h>
 #include <functional>
-#include <fstream>
 #include <sstream>
 #include <iomanip>
 #include <array>
 #include <utility>
+#include <Windows.h>
 
 using namespace std::string_literals;
 
 typedef long long ll;
 typedef unsigned long long ull;
-
 typedef size_t ADDRESS;
 typedef size_t index;
-typedef std::wstring wstr;
 typedef unsigned char byte;
 
-#define fastfunc __forceinline
+// Compilator-specific things
+#ifdef _MSC_VER
+    #define fastfunc __forceinline
+#else
+    #define fastfunc __attribute__((always_inline))
+#endif
 
+#define funcerror(text) std::cerr<<std::dec<< __func__<< " -> "<< text<< ". ec: "<< GetLastError()<< std::endl<<'\t'<<__FILE__<<'\t'<<__LINE__<<std::endl;
 
-#ifndef UNICODE
-#define _T(x) L##x
-#endif // UNICODE
-
-
-int wstrcmp(const wchar_t* str1, const wchar_t* str2);
-byte new_wstrcmp(const wchar_t* str1, const wchar_t* str2);
-
+class Application;
+class Pattern;
+class RAM;
+class DllModule;
+class Offset;
+class Rand;
+template <typename DataType> class Item;
+template <typename T> class Iterator;
 
 
 int wstrcmp(const wchar_t* str1, const wchar_t* str2)
 {
     return std::wstring(str1).compare(std::wstring(str2));
-}
-
-byte new_wstrcmp(const wchar_t* str1, const wchar_t* str2)
-{
-    byte not_lenght_equal = 0xFF;
-    byte not_symbol_equal = 0xFE;
-    byte equal = 0x0;
-    if ( lstrlenW(str1) != lstrlenW(str2) )
-    {
-        return not_lenght_equal;
-    }
-    for ( byte i = lstrlenW(str1); i > 0; --i )
-    {
-        if ( str1[i] != str2[i] )
-        {
-            return not_symbol_equal;
-        }
-    }
-    return equal;
 }
 
 
@@ -83,7 +67,8 @@ class Pattern
     std::string open(std::string str, ull iterator, ull total_nums, ull count)
     {
         if ( !total_nums ) return str;
-        auto before_star = [](ull iterator_onstar){return iterator_onstar-1;};
+
+        auto before_star = [](ull iterator_onstar) {return iterator_onstar - 1; };
         char sym = str[before_star(iterator)];
         index index_symbol = before_star(iterator);
         byte bt = this->bytes[before_star(iterator)];
@@ -102,33 +87,27 @@ class Pattern
 
     std::pair<ull, ull> count_nums(ull current_iterator)
     {
-        ull sum_nums, total_nums, i; sum_nums = total_nums = 0; i = 1;
-        do
-        {
-            if ( this->mask_str[current_iterator + i] >= '0' and this->mask_str[current_iterator + i] <= '9' )
-            {
-                sum_nums += this->mask_str[current_iterator + i] - '0';
+        ull sum_nums, total_nums, i;
+        sum_nums = total_nums = 0;
+        i = 1;
+        do {
+            if ( this->mask_str[current_iterator + i] >= '0' && this->mask_str[current_iterator + i] <= '9' ) {
+                sum_nums += this->mask_str[current_iterator + i] - '0'; // эта хуйня больше не нужна, достаточно просто посчитать колво цифр и потянуть функу из стандартной либы
                 total_nums++;
-            }
-            else break;
-        }
-        while ( i++ );
+            } else break;
+        } while ( i++ );
         current_iterator++;
-        std::string num_slice = this->mask_str.substr(current_iterator, total_nums);
-        sum_nums = std::stoi(num_slice);
-        return std::pair<ull,ull>(total_nums, sum_nums);
+        sum_nums = std::stoi(this->mask_str.substr(current_iterator, total_nums));
+        return std::pair<ull, ull>(total_nums, sum_nums);
     }
-
+    
     void parse()
     {
-        for ( ull iterator = 0; iterator < this->mask_str.size(); iterator++ )
-        {
-            switch ( this->mask_str[iterator] )
-            {
+        for ( ull iterator = 0; iterator < this->mask_str.size(); iterator++ ) {
+            switch ( this->mask_str[iterator] ) {
                 case 'x': break;
-                case '?': if(this->mask_str[iterator + 1] == '*') break; this->bytes[iterator] = 0; this->mask[iterator] = false; break;
-                case '*':
-                {
+                case '?': if ( this->mask_str[iterator + 1] == '*' ) break; this->bytes[iterator] = 0; this->mask[iterator] = false; break;
+                case '*': {
                     auto tmp = count_nums(iterator);
                     this->mask_str = open(this->mask_str, iterator, tmp.first, tmp.second);
                     parse();
@@ -146,12 +125,19 @@ public:
     {
         this->bytes = bytes;
         this->mask = pattern;
-        auto index = [=](auto const& iterator)
-        {
+        auto index = [=](auto const& iterator) {
             return std::distance(this->mask.begin(), iterator);
         };
-        if ( this->mask.size() == this->bytes.size() ) for ( auto i = this->mask.begin(); i != this->mask.end(); ++i ) if ( !( *i ) ) this->bytes[index(i)] = 0b0; else;
-        else throw( "pattern size not matched with bytes size"s );
+
+        if ( this->mask.size() == this->bytes.size() ) {
+            for ( auto i = this->mask.begin(); i != this->mask.end(); ++i ) {
+                if ( !( *i ) ) {
+                    this->bytes[index(i)] = 0b0;
+                }
+            }
+        } else {
+            throw( "pattern size not matched with bytes size"s );
+        }
         return;
     }
 
@@ -185,45 +171,69 @@ public:
         return ( match(pattern2.bytes) && match(pattern2.mask) );
     }
 
-    std::wstring operator<<(Pattern)
+    std::wstringstream operator<<(Pattern)
     {
-        std::wstring tmp;
         std::wstringstream wss;
-        for ( size_t i = 0; i < this->bytes.size(); ++i )
-        {
+        for ( size_t i = 0; i < this->bytes.size(); ++i ) {
             wss << std::to_wstring(this->bytes[i])
                 << std::wstring(L"\t->\t")
                 << std::to_wstring(this->mask[i])
                 << std::endl;
-
-            tmp += ( std::to_wstring(this->bytes[i])
-                    + std::wstring(L"\t->\t")
-                    + std::to_wstring(this->mask[i])
-                    + std::wstring(L"\n") );
-
         }
-        return wss.str();
+        return wss;
+    }
+
+    BYTE& operator[](const ull index)
+    {
+        return this->bytes[index];
     }
 };
 
 
 struct WinapiHandles
 {
-    HWND window{0};
-    std::vector<HANDLE> handles{};
-    std::vector<DWORD> processid{};
-    std::vector<HMODULE> modules{};
+    DWORD processid { 0 };
+    HWND window { 0 };
+    std::vector<HANDLE> handles {};
+    std::vector<HMODULE> modules {};
 };
+
 
 class Offset
 {
     std::vector<ADDRESS> addresses;
+public:
+    ull size()
+    {
+        return this->addresses.size();
+    }
+
+    ADDRESS& operator[](const ull index)
+    {
+        return this->addresses[index];
+    }
+
+    Offset operator+=(ADDRESS address)
+    {
+        this->addresses.push_back(address);
+        return *this;
+    }
+
+    Offset operator+=(Offset offset)
+    {
+        for ( ull i = 0; i < offset.size(); ++i ) {
+            this->addresses.push_back(i);
+        }
+        return *this;
+    }
 };
+
 
 class RAM
 {
 public:
-    ULONG dw_rights = PROCESS_QUERY_INFORMATION | PROCESS_VM_READ;
+    ULONG dw_rights = PROCESS_VM_OPERATION | PROCESS_QUERY_INFORMATION | PROCESS_VM_READ;
+    //ULONG dw_rights = PROCESS_VM_READ;
     const char* module_dll = "\0";
     MEMORY_BASIC_INFORMATION mbi;
     std::wstring process_name;
@@ -239,10 +249,10 @@ public:
     HDC hDC;
 
     template <typename T>
-    fastfunc T read(HANDLE address);
+    fastfunc T read(DWORD address);
 
     template <typename T>
-    fastfunc void write(HANDLE address, T value);
+    fastfunc void write(DWORD address, T value);
 
     template <typename T, size_t N>
     size_t countof(T(&array)[N]);
@@ -252,9 +262,6 @@ public:
 
     template <typename T>
     T SeqRead(DWORD address_base, std::vector<DWORD> offsets);
-
-    template <typename T>
-    void PrintArray(T arr[]);
 
     template <typename T>
     T JumpMultiOffsets(T addr, DWORD offsets[], short& jumpCompleted);
@@ -289,7 +296,7 @@ public:
     DWORD FindPattern(DWORD start, DWORD size, CONST BYTE* sig, LPCSTR mask, size_t masksize);
     DWORD FindPattern(DWORD start, DWORD size, CONST BYTE* sig, LPCSTR mask);
 
-    DWORD FindPatternArray(DWORD start, DWORD size, LPCSTR mask, int count, ...);//find pattern array in address space of process
+    DWORD FindPatternArray(DWORD start, DWORD size, LPCSTR mask, int count, ...);
     DWORD FindPatternArray(DWORD start, DWORD size, std::string mask, ...);
     DWORD FindPatternArray(DWORD start, DWORD size, Pattern pattern);
 
@@ -305,6 +312,9 @@ public:
 
     void GetWindow();
     HWND FindTopWindow();
+
+    bool UnprotectMemory(ADDRESS address, size_t size);
+    std::vector<byte> PartialRead(ADDRESS address, ull size);
 }ram;
 
 
@@ -315,12 +325,13 @@ class DllModule
     const wchar_t* name;
     HANDLE handle_base;
     DWORD module_size;
-    RAM *ram_ptr;
+    RAM* ram_ptr;
 public:
 
     DllModule();
     DllModule(const wchar_t* name);
     DllModule(const wchar_t* name, RAM ram);
+    DllModule(const wchar_t* name, Application app);
 
     const wchar_t* GetName();
     HANDLE GetBase();
@@ -331,7 +342,11 @@ public:
     std::vector<DWORD> GetOffssets();
     std::pair<HANDLE, DWORD> GetModuleBaseEnd();
     DWORD GetSize();
-    void WithInstance(RAM *ram);
+
+    void WithInstance(RAM* ram);
+    void WithInstance(Application app);
+    void WithInstance();
+
     void GetModule(std::wstring module_name);
 };
 
@@ -358,20 +373,39 @@ public:
         seed = rd() ^ (
             (std::mt19937::result_type)
             std::chrono::duration_cast<std::chrono::seconds>(
-            std::chrono::system_clock::now().time_since_epoch()
-            ).count() +
+                std::chrono::system_clock::now().time_since_epoch()
+                ).count() +
             (std::mt19937::result_type)
             std::chrono::duration_cast<std::chrono::microseconds>(
-            std::chrono::high_resolution_clock::now().time_since_epoch()
-            ).count() );
-
+                std::chrono::high_resolution_clock::now().time_since_epoch()
+                ).count() );
     }
 
-    __forceinline unsigned int randint(int min, int max)
+    fastfunc unsigned int randint(int min, int max)
     {
         std::mt19937 gen(seed);
         std::uniform_int_distribution<unsigned> distrib(min, max);
         return distrib(gen);
+    }
+
+    fastfunc std::string uuid()
+    {
+        const static char v[] = "0123456789abcdef";
+        const static std::array<bool, 16> dash { 0, 0, 0, 0, 1, 0, 1, 0, 1, 0, 1, 0, 0, 0, 0, 0 };
+
+        std::stringstream ss;
+        std::for_each(
+            dash.begin(),
+            dash.end(),
+            [=, &ss](bool dash_value) {
+                if ( dash_value ) {
+                    ss << "-";
+                }
+                ss << v[randint(0, 17)];
+                ss << v[randint(0, 17)];
+            }
+        );
+        return ss.str();
     }
 };
 
@@ -389,7 +423,7 @@ public:
     }
     T prev()
     {
-        return --val >= 0 ? val : throw( "iterator < 0"s );
+        return --val >= 0 ? val : throw( std::exception { "iterator < 0"s } );
     }
     T get()
     {
@@ -398,19 +432,78 @@ public:
 };
 
 
-template <typename T>
-fastfunc T RAM::read(HANDLE  address)
+class Application
 {
-    static T _read;
-    static size_t _bytesread = 0;
+    SYSTEM_INFO system_info;
+public:
+    std::wstring name;
+    RAM Ram;
+    std::vector<DllModule> Dlls;
+
+    Application()
+    {
+        memset(&this->system_info, 0, sizeof(system_info));
+        GetSystemInfo(&system_info);
+
+        WCHAR tmp[MAX_PATH];
+        HMODULE hThis = NULL;
+        GetModuleFileNameW(hThis, tmp, MAX_PATH);
+
+        auto wtmp = std::wstring(tmp);
+        this->name = std::wstring(wtmp.begin() + std::distance(wtmp.begin(), wtmp.begin() + wtmp.find_last_of(L'\\') + 1), wtmp.end());
+
+        Ram.process_name = std::wstring(this->name);
+        Ram.GetProcessHandle(this->name.c_str());
+    }
+
+    Application(LPCWSTR process_name) // Повинно закiнчуватися на .exe
+    {
+        this->name = std::wstring(process_name);
+
+        Ram.process_name = std::wstring(process_name);
+        memset(&this->system_info, 0, sizeof(system_info));
+        GetSystemInfo(&system_info);
+
+        Ram.GetProcessHandle(process_name);
+        Ram.GetWindow();
+    }
+
+    std::pair<ADDRESS, ADDRESS> MinMaxAddress()
+    {
+        return std::make_pair(reinterpret_cast<ADDRESS>( system_info.lpMinimumApplicationAddress ), reinterpret_cast<ADDRESS>( system_info.lpMaximumApplicationAddress ));
+    }
+
+    RAM* GetRamInstance()
+    {
+        return &this->Ram;
+    }
+};
+
+
+template <typename T>
+fastfunc T RAM::read(DWORD address)
+{
+    T _read;
+    SIZE_T _bytesread = 0;
     ReadProcessMemory(hProcess, (LPCVOID)address, &_read, sizeof(T), &_bytesread);
-    if ( !( _bytesread ) || ( sizeof(T) != _bytesread ) ) std::cerr << "read -> cannot read memory\n";
+    if ( !( _bytesread ) || ( sizeof(T) != _bytesread ) ) {
+        //funcerror("Cannot read memory");
+        //if ( !hProcess ) {
+        //    funcerror("No have process handle. var: hProcess");
+        //}
+        //DWORD stack = 0;
+        //_asm {
+        //    mov stack, esp // || //DWORD PTR[ip];
+        //}
+        //std::cerr << "\tStack pointer address (hex): " << std::hex << stack << std::endl;
+        //std::cerr << "\tTotal bytes read: " << _bytesread << std::endl;
+    }
     else return _read;
 }
 
 
 template <typename T>
-fastfunc void RAM::write(HANDLE address, T value)
+fastfunc void RAM::write(DWORD address, T value)
 {
     WriteProcessMemory(hProcess, (LPVOID)address, &value, sizeof(T), NULL);
 }
@@ -442,11 +535,9 @@ T RAM::SeqRead(DWORD address_base, std::vector<DWORD> offsets)
     ADDRESS base_point = this->read<DWORD>(address_base);
     T out;
     USHORT counter = offsets.size();
-    for ( auto i : offsets )
-    {
+    for ( auto i : offsets ) {
         counter--;
-        if ( !counter )
-        {
+        if ( !counter ) {
             out = this->read<T>(base_point + i);
             return out;
         }
@@ -456,35 +547,23 @@ T RAM::SeqRead(DWORD address_base, std::vector<DWORD> offsets)
 
 
 template <typename T>
-void RAM::PrintArray(T arr[])
-{
-    for ( auto i : arr ) std::cout << i << '\n';
-}
-
-
-template <typename T>
 T RAM::JumpMultiOffsets(T addr, DWORD offsets[], short& jumpCompleted)
 {
     DWORD buf[2];
     short amount_of_jumps = 0;
     LPDWORD* ptrToOffsets = &offsets;
-    for ( int i = 0; ptrToOffsets != nullptr; i++ )
-    {
+    for ( int i = 0; ptrToOffsets != nullptr; i++ ) {
         amount_of_jumps++;
     }
     buf[0] = addr;
     short jumpCompl = 0;
     int data_size = sizeof(T);
-    for ( int i = 0; amount_of_jumps != 0; i++ )
-    {
+    for ( int i = 0; amount_of_jumps != 0; i++ ) {
         buf[0] = read<DWORD>(buf[0] += offsets[i]);
-        if ( buf[0] != 0 )
-        {
+        if ( buf[0] != 0 ) {
             jumpCompleted++;
-        }
-        else
-        {
-            std::cout << "multiple jump error "; return 0;
+        } else {
+            std::cerr << "multiple jump error "; return 0;
         }
     }
     return buf[0];
@@ -501,21 +580,16 @@ std::vector<DWORD> RAM::FindValue(T val)
     auto end_ptr = system_info.lpMaximumApplicationAddress;
     uint32_t* current_ptr = reinterpret_cast<UINT32*>( start_ptr );
 
-    while ( current_ptr < end_ptr )
-    {
+    while ( current_ptr < end_ptr ) {
         MEMORY_BASIC_INFORMATION mbi;
         auto bytes = VirtualQueryEx(this->hProcess, current_ptr, &mbi, sizeof(mbi));
-        if ( mbi.State == MEM_COMMIT && mbi.Protect == PAGE_READWRITE )
-        {
+        if ( mbi.State == MEM_COMMIT && mbi.Protect == PAGE_READWRITE ) {
             std::vector<uint8_t> read_buffer(mbi.RegionSize);
             SIZE_T read_byte;
-            if ( ReadProcessMemory(this->hProcess, current_ptr, read_buffer.data(), mbi.RegionSize, &read_byte) == TRUE )
-            {
+            if ( ReadProcessMemory(this->hProcess, current_ptr, read_buffer.data(), mbi.RegionSize, &read_byte) == TRUE ) {
                 T* current_page_ptr = reinterpret_cast<T*>( read_buffer.data() );
-                while ( (UINT8*)current_page_ptr < read_buffer.data() + read_buffer.size() )
-                {
-                    if ( *current_page_ptr == val )
-                    {
+                while ( (UINT8*)current_page_ptr < read_buffer.data() + read_buffer.size() ) {
+                    if ( *current_page_ptr == val ) {
                         addresses.push_back(reinterpret_cast<DWORD>( ( ( reinterpret_cast<UINT8*>( current_page_ptr ) ) - read_buffer.data() ) + reinterpret_cast<UINT8*>( mbi.BaseAddress ) ));
                     }
                     current_page_ptr = reinterpret_cast<T*>( reinterpret_cast<char*>( current_page_ptr ) + 1 );
@@ -530,46 +604,19 @@ std::vector<DWORD> RAM::FindValue(T val)
 
 int RAM::CompareModules(wchar_t* str1, wchar_t* str2)
 {
-    unsigned long str1_symbols = 0;
-    unsigned long str2_symbols = 0;
-    int counter = 0;
-    for ( int i = 0; str1[i] != '\0'; i++ )
-    {
-        str1_symbols++;
-    }
-    for ( int j = 0; str2[j] != '\0'; j++ )
-    {
-        str2_symbols++;
-    }
-    for ( ; str2_symbols != 0; str2_symbols-- )
-    {
-        if ( str1[str1_symbols] == str2[str2_symbols] )
-        {
-        }
-        else
-        {
-            counter++;
-        }
-        str1_symbols--;
-    }
-
-    return counter;
+    return wstrcmp(str1, str2);
 }
 
 
 DWORD RAM::getModuleHandle(HMODULE hMods[])
 {
     unsigned i;
-    for ( i = 0; i < ( pid / sizeof(HMODULE) ); i++ )
-    {
+    for ( i = 0; i < ( pid / sizeof(HMODULE) ); i++ ) {
         wchar_t szModName[MAX_PATH];
         if ( K32GetModuleFileNameExW(hProcess, hMods[i], szModName,
-            sizeof(szModName) / sizeof(TCHAR)) )
-        {
-            if ( strcmp((char*)szModName, (char*)module_dll) == NULL )
-            {
-                if ( CompareModules((wchar_t*)szModName, (wchar_t*)module_dll) == 0 )
-                {
+                                     sizeof(szModName) / sizeof(TCHAR)) ) {
+            if ( strcmp((char*)szModName, (char*)module_dll) == NULL ) {
+                if ( CompareModules((wchar_t*)szModName, (wchar_t*)module_dll) == 0 ) {
                     printf("client.dll base: %08X\n", hMods[i]);
                     module_dll_base = (DWORD)hMods[i];
                     return module_dll_base;
@@ -584,29 +631,33 @@ DWORD RAM::getModuleHandle(HMODULE hMods[])
 std::pair<HANDLE, DWORD>RAM::GetModule(const wchar_t* modulename)
 {
 
-    HANDLE h_module = CreateToolhelp32Snapshot(TH32CS_SNAPMODULE, dwProcId);
+    HANDLE hModule = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS | TH32CS_SNAPTHREAD | TH32CS_SNAPMODULE, dwProcId);
+    if ( hModule == (HANDLE)-1 ) {
+        std::wcerr
+            << L"GetModule -> "s
+            << L"Cant create snapshot from process"s
+            << std::endl
+            << GetLastError()
+            << std::endl;
+    }
     std::string_view error = "HANDLE GetModule() -> No have handle of process"s;
 
     MODULEENTRY32 mEntry;
     mEntry.dwSize = sizeof(mEntry);
 
-    if ( (DWORD)hProcess == (DWORD)0x0 )
-    {
+    if ( (DWORD)hProcess == (DWORD)0x0 ) {
         std::cerr << error << std::endl;
         throw error;
         exit(0xAB0BA);
     }
 
-    do
-    {
-        if ( !new_wstrcmp((wchar_t*)mEntry.szModule, (wchar_t*)modulename) )
-        {
+    do {
+        if ( !wstrcmp((wchar_t*)mEntry.szModule, (wchar_t*)modulename) ) {
             //Smodule module = { (DWORD)mEntry.hModule, mEntry.modBaseSize };
             return std::make_pair(mEntry.hModule, mEntry.modBaseSize);
-
         }
-    } while ( Module32Next(h_module, &mEntry) );
-    std::wcout << L"Find " << modulename << L" module failed" << std::endl;
+    } while ( Module32Next(hModule, &mEntry) );
+    //std::wcerr << std::vformat(L"Find module {} failed\n", std::make_wformat_args(modulename));
     return std::make_pair((HANDLE)0, (DWORD)0);
 }
 
@@ -616,8 +667,7 @@ DWORD RAM::getMultiModuleHandle()
     HMODULE hModsArray[32];
     K32EnumProcessModules(hProcess, hModsArray, sizeof(hModsArray), &pid);
 
-    for ( int i = 0; i <= sizeof(hModsArray); i++ )
-    {
+    for ( int i = 0; i <= sizeof(hModsArray); i++ ) {
         std::cout << "loaded module from process\n";
         std::cout << hModsArray[i] << '\n';
         if ( (int)hModsArray[i] == 0xcccccccc )
@@ -634,41 +684,31 @@ HANDLE RAM::getProcessHandle(const wchar_t* window_name)
     HWND hWnd;
     HDC hDC;
     hWnd = FindWindowW(0, window_name);
-    if ( hWnd == 0 )
-    {
+    if ( hWnd == 0 ) {
         printf("FindWindow failed, %08X\n", GetLastError());
         return NULL;
-    }
-    else
-    {
+    } else {
         std::cout << "handle of window:\t" << hWnd << '\n';
     }
     GetWindowThreadProcessId(hWnd, &pid);
     std::cout << "process id is:\t" << pid << '\n';
-    if ( pid == NULL )
-    {
-        std::cout << "find process id failed\n"; GetLastError();
+    if ( pid == NULL ) {
+        //std::cout << std::format("find process id failed by error {}\n", std::make_format_args(std::to_string(GetLastError())));
     }
     hProcess = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, 0, pid);
-    if ( hProcess == 0 )
-    {
+    if ( hProcess == 0 ) {
         printf("OpenProcess failed, %08X\n", GetLastError());
         return NULL;
-    }
-    else
-    {
+    } else {
         std::cout << "handle of process:\t" << hWnd << '\n';
     }
     hDC = GetDC(hWnd);
     HMODULE hModsArray[1024];
     HMODULE hMods;
     int i;
-    if ( K32EnumProcessModules(hProcess, hModsArray, sizeof(hModsArray), &pid) == 0 )
-    {
+    if ( K32EnumProcessModules(hProcess, hModsArray, sizeof(hModsArray), &pid) == 0 ) {
         printf("enumprocessmodules failed, %08X\n", GetLastError());
-    }
-    else
-    {
+    } else {
         getModuleHandle((HMODULE*)hModsArray);
     }
 
@@ -682,10 +722,8 @@ DWORD RAM::GetProcessHandle(const wchar_t* process_name_exe)
 
     PROCESSENTRY32 entry;
     entry.dwSize = sizeof(entry);
-    do
-    {
-        if ( !new_wstrcmp((const wchar_t*)entry.szExeFile, (const wchar_t*)process_name_exe) )
-        {
+    do {
+        if ( !wstrcmp((const wchar_t*)entry.szExeFile, (const wchar_t*)process_name_exe) ) {
             dwProcId = entry.th32ProcessID;
             CloseHandle(handle);
             hProcess = OpenProcess(dw_rights, false, dwProcId);
@@ -698,9 +736,8 @@ DWORD RAM::GetProcessHandle(const wchar_t* process_name_exe)
 
 HWND RAM::getWindowHandle(const wchar_t* wch_window_name)
 {
-    if ( lstrlenW(wch_window_name) == NULL )
-    {
-        std::cerr << "HWND getWindowHandle() -> no have window name" << std::endl;
+    if ( lstrlenW(wch_window_name) == NULL ) {
+        std::cerr << "HWND getWindowHandle() -> no have window name"s << std::endl;
     }
     hWindow = FindWindowW(0, wch_window_name);
     if ( !hWindow ) has_window = false;
@@ -710,17 +747,15 @@ HWND RAM::getWindowHandle(const wchar_t* wch_window_name)
 
 HDC RAM::GetHDC()
 {
-    if ( hWindow != NULL && has_window )
-    {
+    if ( hWindow != NULL && has_window ) {
         this->hDC = GetWindowDC(hWindow);
-        if ( this->hDC != NULL )
-        {
+        if ( this->hDC != NULL ) {
             return this->hDC;
         }
-        std::cout << "invalid hdc handle" << std::endl;
-        throw "invalid hdc handle";
+        std::cerr << "invalid hdc handle"s << std::endl;
+        throw "invalid hdc handle"s;
     }
-    std::cout << "This app have no visible windows" << std::endl;
+    std::cout << "This app have no visible windows"s << std::endl;
 }
 
 
@@ -728,8 +763,7 @@ int RAM::read_bytes(LPCVOID addr, int num, void* buf)
 {
     SIZE_T sz = 0;
     int r = ReadProcessMemory(hProcess, addr, buf, num, &sz);
-    if ( r == 0 || sz == 0 )
-    {
+    if ( r == 0 || sz == 0 ) {
         printf("RPM error, %08X\n", "errorStatus:t", GetLastError(), "\tbyteSIze:", sz, "\tr size:", r);
         return 0;
     }
@@ -750,10 +784,8 @@ fastfunc T RAM::ReadMemoryArray(ADDRESS start_address, ADDRESS end_address)
 
 fastfunc bool RAM::DataCompare(const BYTE* pData, const BYTE* pMask, const char* pszMask)
 {
-    for ( ; *pszMask; ++pszMask, ++pData, ++pMask )
-    {
-        if ( *pszMask == 'x' && *pData != *pMask )
-        {
+    for ( ; *pszMask; ++pszMask, ++pData, ++pMask ) {
+        if ( *pszMask == 'x' && *pData != *pMask ) {
             return false;
         }
     }
@@ -762,12 +794,10 @@ fastfunc bool RAM::DataCompare(const BYTE* pData, const BYTE* pMask, const char*
 
 
 fastfunc bool RAM::DataCompare(const BYTE* readed_data, const BYTE* signature, const char* mask, size_t size)
-{   
+{
     size_t i = 0;
-    for ( ; i < size; ++i, ++readed_data )
-    {
-        if ( mask[i] == 'x' && *readed_data != signature[i] )
-        {
+    for ( ; i < size; ++i, ++readed_data ) {
+        if ( mask[i] == 'x' && *readed_data != signature[i] ) {
             return false;
         }
     }
@@ -777,30 +807,28 @@ fastfunc bool RAM::DataCompare(const BYTE* readed_data, const BYTE* signature, c
 
 DWORD RAM::FindPattern(DWORD start, DWORD size, CONST BYTE* sig, LPCSTR mask, size_t masksize)
 {
-    if ( !size ) throw "zero bytes to compare"s;
+    if ( !size ) throw std::invalid_argument("zero bytes to compare");
 
-    BYTE* data = new BYTE[size+1];
+    BYTE* data = new BYTE[size + 1];
     std::fill_n(data, size + 1, 0);
     SIZE_T bytesread = NULL;
 
-    // Проверка на защиту памяти от чтения
     if ( !this->IsMemoryReadable((void*)start, size) ) std::cerr << "cannot read memory" << ": " << "Memory block is not readable by protect" << std::endl;
 
     ReadProcessMemory(hProcess, (LPCVOID)start, data, size, &bytesread);
-    if ( bytesread <= 0 )
-        std::cerr << "cannot read memory" << ": " << "error:" << " " << GetLastError() << std::endl;
-        throw "FindPattern -> cannot read memory"s;
+    if ( bytesread <= 0 ) {
+        //std::cerr << std::format("Cannot read memory: {} error\n", std::make_format_args(std::to_string(GetLastError())));
+        throw std::invalid_argument("FindPattern -> cannot read memory");
+    }
 
-    for ( DWORD i = 0; i < size; i++ )
-    {
-        if ( DataCompare(( CONST BYTE* )( data + i ), ( CONST BYTE* )sig, mask, masksize) )
-        {
-            delete( data );
+    for ( DWORD i = 0; i < size; i++ ) {
+        if ( DataCompare(( CONST BYTE* )( data + i ), ( CONST BYTE* )sig, mask, masksize) ) {
+            delete[](data);
             return start + i;
         }
     }
 
-    delete( data );
+    delete[](data);
     return NULL;
 }
 
@@ -808,21 +836,31 @@ DWORD RAM::FindPattern(DWORD start, DWORD size, CONST BYTE* sig, LPCSTR mask, si
 DWORD RAM::FindPattern(DWORD start, DWORD size, CONST BYTE* sig, LPCSTR mask)
 {
     if ( !size ) throw "zero bytes to compare"s;
+    if ( !this->IsMemoryReadable((void*)start, size) ) {
+        //funcerror("Cannot read memory: Memory block is not readable by protect");
+        //this->UnprotectMemory(start, size);
+    }
 
     BYTE* data = new BYTE[size];
     SIZE_T bytesread = NULL;
-    ReadProcessMemory(hProcess, (LPCVOID)start, data, size, &bytesread);
-    if ( bytesread <= 0 )
-        throw "FindPattern -> cannot read memory"s;
-    for ( DWORD i = 0; i < size; i++ )
-    {
-        if ( DataCompare(( CONST BYTE* )( data + i ), ( CONST BYTE* )sig, mask))
-        {
-            delete( data );
+
+    std::fill_n(data, size, 0);
+    //ReadProcessMemory(hProcess, (LPCVOID)start, data, size, &bytesread);
+
+    ull _current = start;
+    auto out = this->PartialRead(start, size);
+    for ( ull i = 0; i < out.size(); ++i ) {
+        data[i] = out[i];
+    }
+
+    for ( DWORD i = 0; i < size; i++ ) {
+        if ( DataCompare(( CONST BYTE* )( data + i ), ( CONST BYTE* )sig, mask) ) {
+            delete[](data);
             return start + i;
         }
     }
-    delete( data );
+
+    delete[](data);
     return NULL;
 }
 
@@ -832,8 +870,7 @@ DWORD RAM::FindPatternArray(DWORD start, DWORD size, LPCSTR mask, int count, ...
     byte* sig = new byte[count + 1];
     va_list ap;
     va_start(ap, count);
-    for ( int i = 0; i < count; i++ )
-    {
+    for ( int i = 0; i < count; i++ ) {
         char read = va_arg(ap, char);
         sig[i] = read;
 
@@ -852,8 +889,7 @@ DWORD RAM::FindPatternArray(DWORD start, DWORD size, std::string mask, ...)
     byte* sig = new byte[count + 1];
     va_list ap;
     va_start(ap, count);
-    for ( int i = 0; i < count; i++ )
-    {
+    for ( int i = 0; i < count; i++ ) {
         char read = va_arg(ap, char);
         sig[i] = read;
 
@@ -866,7 +902,7 @@ DWORD RAM::FindPatternArray(DWORD start, DWORD size, std::string mask, ...)
 
 DWORD RAM::FindPatternArray(DWORD start, DWORD size, Pattern pattern)
 {
-    byte* sig = new byte[pattern.bytes.size()+1];
+    byte* sig = new byte[pattern.bytes.size() + 1];
     for ( size_t i = 0; i < pattern.bytes.size(); ++i )
         sig[i] = pattern.bytes[i];
     sig[pattern.bytes.size()] = '\0';
@@ -880,8 +916,7 @@ std::vector<DWORD> RAM::FindAllPatterns(DWORD startAddress, DWORD end_address, L
 {
     auto count = sign.size();
     byte* sig = new byte[count + 1];
-    for ( int i = 0; i < count; i++ )
-    {
+    for ( int i = 0; i < count; i++ ) {
         char read = sign[i];
         sig[i] = read;
 
@@ -890,14 +925,11 @@ std::vector<DWORD> RAM::FindAllPatterns(DWORD startAddress, DWORD end_address, L
 
     std::vector<DWORD> patern_addresses;
     DWORD checksize = 0xFF;
-    for ( int i = 0; i < patterns_counter; ++i )
-    {
-        for ( DWORD64 currentaddress = startAddress; currentaddress < end_address;)
-        {
+    for ( int i = 0; patern_addresses.size() < patterns_counter; ++i ) {
+        for ( DWORD64 currentaddress = startAddress; currentaddress < end_address;) {
             auto finded = FindPattern(currentaddress, checksize, sig, mask);
 
-            if ( startAddress < end_address && finded < end_address && finded )
-            {
+            if ( startAddress < end_address && finded < end_address && finded ) {
                 patern_addresses.push_back(finded);
                 currentaddress = patern_addresses[patern_addresses.size() - 1] + 1;
                 continue;
@@ -906,16 +938,21 @@ std::vector<DWORD> RAM::FindAllPatterns(DWORD startAddress, DWORD end_address, L
                 throw( 1 );
             currentaddress += checksize;
         }
-        delete sig;
+        delete[](sig);
         if ( patern_addresses.size() )
             return patern_addresses;
         else
-            throw( 0xAB0BA );
+            throw std::exception("No addresses found");
     }
     return patern_addresses;
 }
 
-
+/// <summary>
+/// Чекает кусок памяти со старта и до заданного кол-ва байт
+/// </summary>
+/// <param name="ptr">: Адрес начала блока памяти, который надо прочекать</param>
+/// <param name="byteCount">: Кол-во байт, которые надо прочекать</param>
+/// <returns></returns>
 bool RAM::IsMemoryReadable(void* ptr, size_t byteCount)
 {
     MEMORY_BASIC_INFORMATION temp_mbi;
@@ -939,7 +976,14 @@ bool RAM::IsMemoryReadable(void* ptr, size_t byteCount)
     return true;
 }
 
-
+/// <summary>
+/// Finds byte pattern that must be near with other pattern
+/// </summary>
+/// <param name="pattern2verificate"></param>
+/// <param name="range"></param>
+/// <param name="mask"></param>
+/// <param name="pattern_sign"></param>
+/// <returns></returns>
 ADDRESS RAM::VerificatePattern(ADDRESS pattern2verificate, std::pair<ADDRESS, ADDRESS> range, LPCSTR mask, std::vector<BYTE> pattern_sign)
 // Эта штука должна находить байтовый паттерн, который может находиться только рядом с нужным адресом
 // pattern2verificate - адрес, от которого искать
@@ -949,8 +993,7 @@ ADDRESS RAM::VerificatePattern(ADDRESS pattern2verificate, std::pair<ADDRESS, AD
 {
     auto count = pattern_sign.size();
     byte* sig = new byte[count + 1];
-    for ( int i = 0; i < count; i++ )
-    {
+    for ( int i = 0; i < count; i++ ) {
         char read = pattern_sign[i];
         sig[i] = read;
 
@@ -966,36 +1009,27 @@ ADDRESS RAM::VerificatePattern(ADDRESS pattern2verificate, std::pair<ADDRESS, AD
 
 void RAM::WaitProcess(std::wstring process_name, std::wstring window_name)
 {
-    for ( ;; Sleep(1000) )
-    {
-        if ( process_name != L"" && window_name != L"" )
-        {
+    for ( ;; Sleep(1000) ) {
+        if ( process_name != L"" && window_name != L"" ) {
             if ( this->GetProcessHandle(process_name.c_str()) && this->getWindowHandle(window_name.c_str()) )
                 return;
-        }
-        else
-        {
+        } else {
             if ( this->process_name == L"" || this->window_name == L"" )
                 throw( 0xAB0BA );
             process_name = this->process_name;
             window_name = this->window_name;
         }
-
     }
 }
 
 
 void RAM::WaitProcess(std::wstring process_name)
 {
-    for ( ;; Sleep(1000) )
-    {
-        if ( process_name != L"" )
-        {
+    for ( ;; Sleep(1000) ) {
+        if ( process_name != L"" ) {
             if ( this->GetProcessHandle(process_name.c_str()) )
                 return;
-        }
-        else
-        {
+        } else {
             if ( this->process_name == L"" )
                 throw( 0xAB0BA );
             process_name = this->process_name;
@@ -1010,20 +1044,19 @@ void RAM::WaitProcess()
     if ( this->process_name == L"" || this->window_name == L"" )
         throw( 0xAB0BA );
     for ( ;; Sleep(1000) )
-        if ( this->GetProcessHandle(this->process_name.c_str()) && this->getWindowHandle(this->window_name.c_str()) )
+        if ( this->GetProcessHandle(this->process_name.c_str()) ) {
+            this->GetWindow();
             return;
+        }
 }
 
 
 void RAM::GetWindow()
 {
-    if ( this->dwProcId )
-    {
+    if ( this->dwProcId ) {
         this->hWindow = this->FindTopWindow();
         this->GetHDC();
-    }
-    else
-    {
+    } else {
         this->hWindow = this->getWindowHandle(this->window_name.c_str());
     }
 }
@@ -1032,31 +1065,44 @@ void RAM::GetWindow()
 HWND RAM::FindTopWindow()
 {
     if ( !this->dwProcId )
-        throw "FindTopWindow -> Cannot get process id"s;
+        throw std::exception("FindTopWindow -> Cannot get process id");
     DWORD pid = this->dwProcId;
     std::pair<HWND, DWORD> params = { 0, pid };
 
-    BOOL bResult = EnumWindows([](HWND hwnd, LPARAM lParam) -> BOOL
-    {
-        auto pParams = ( std::pair<HWND, DWORD>* )( lParam );
+    BOOL bResult = EnumWindows(
+        [](HWND hwnd, LPARAM lParam) -> BOOL {
+            auto pParams = ( std::pair<HWND, DWORD>* )( lParam );
 
-        DWORD processId;
-        if ( GetWindowThreadProcessId(hwnd, &processId) && processId == pParams->second )
-        {
-            SetLastError(-1);
-            pParams->first = hwnd;
-            return false;
-        }
+            DWORD processId;
+            if ( GetWindowThreadProcessId(hwnd, &processId) && processId == pParams->second ) {
+                SetLastError(-1);
+                pParams->first = hwnd;
+                return false;
+            }
 
-        return true;
-    }, (LPARAM)&params);
+            return true;}, 
+        (LPARAM)&params);
 
-    if ( !bResult && GetLastError() == -1 && params.first )
-    {
+    if ( !bResult && GetLastError() == -1 && params.first ) {
         return params.first;
     }
 
     return 0;
+}
+
+
+bool RAM::UnprotectMemory(ADDRESS address, size_t size)
+{
+    // В идеале - вызвать отделённый процесс, им открыть процесс таргета с правами PROCESS_VM_OPERATION и репротектнуть NOACCESS страницу
+    // Но это в идеале, а пока...
+    DWORD newprotect = PAGE_EXECUTE | PAGE_READWRITE;
+    if ( !VirtualProtect(reinterpret_cast<LPVOID>( address ), size, newprotect, nullptr) ) {
+        funcerror("Cannot unprotect memory");
+        return false;
+        // всегда падает с кодом 998
+        // сука)0))
+    }
+    return true;
 }
 
 
@@ -1081,11 +1127,20 @@ DllModule::DllModule(const wchar_t* name)
 
 DllModule::DllModule(const wchar_t* name, RAM ram)
 {
+    this->ram_ptr = &ram;
     offsets.clear();
     this->name = name;
-    module_base_size = ram.GetModule(this->name);
+    module_base_size = ram_ptr->GetModule(this->name);
     handle_base = module_base_size.first;
     module_size = module_base_size.second;
+    return;
+}
+
+
+DllModule::DllModule(const wchar_t* name, Application app)
+{
+    *this = DllModule(name);
+    this->ram_ptr = app.GetRamInstance();
 }
 
 
@@ -1144,9 +1199,15 @@ DWORD DllModule::GetSize()
 }
 
 
-void DllModule::WithInstance(RAM *ram)
+void DllModule::WithInstance(RAM* ram)
 {
     this->ram_ptr = ram;
+}
+
+
+void DllModule::WithInstance(Application app)
+{
+    this->ram_ptr = &app.Ram;
 }
 
 
@@ -1160,44 +1221,16 @@ void DllModule::GetModule(std::wstring module_name)
 }
 
 
-class Application
-{
-    SYSTEM_INFO system_info;
-public:
-    std::wstring Name;
-    RAM Ram;
-    std::vector<DllModule> Dlls;
-
-    Application()
-    {
-        memset(&this->system_info, 0, sizeof(system_info));
-        GetSystemInfo(&system_info);
-
-        WCHAR tmp[MAX_PATH];
-        HMODULE hThis = NULL;
-        GetModuleFileNameW(hThis, tmp, MAX_PATH);
-        auto wtmp = std::wstring(tmp);
-        this->Name = std::wstring(wtmp.begin() + std::distance(wtmp.begin(), wtmp.begin() + wtmp.find_last_of(L'\\') + 1), wtmp.end());
-        Ram.process_name = std::wstring(this->Name);
-        Ram.GetProcessHandle(this->Name.c_str());
-    }
-
-    Application(LPCWSTR process_name) // Повинно закiнчуватися на .exe
-    {
-        this->Name = std::wstring(process_name);
-        Ram.process_name = std::wstring(process_name);
-        memset(&this->system_info, 0, sizeof(system_info));
-        GetSystemInfo(&system_info);
-
-        Ram.GetProcessHandle(process_name);
-        Ram.GetWindow();
-    }
-
-    std::pair<LPVOID, LPVOID> GetBaseEnd()
-    {
-        return std::make_pair(system_info.lpMinimumApplicationAddress, system_info.lpMaximumApplicationAddress);
-    }
-};
-
-
 Application this_application = Application();
+
+
+std::vector<byte> RAM::PartialRead(ADDRESS address, ull size)
+{
+    std::vector<byte> out;
+    ADDRESS _current = address;
+    while ( _current < address + size ) {
+        out.push_back(this->read<byte>(_current));
+        _current += sizeof byte;
+    }
+    return out;
+}
